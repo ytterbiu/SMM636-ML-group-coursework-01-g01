@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<!-- saved from url=(0029)http://127.0.0.1:4324/jjj.Rmd -->
+<html class=""><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <script type="application/shiny-singletons"></script>
+  <script type="application/html-dependencies">jquery[3.7.1];shiny-css[1.13.0];shiny-busy-indicators[1.13.0];shiny-javascript[1.13.0]</script>
+<script src="./Shiny App_files/jquery.min.js.download"></script>
+<link href="./Shiny App_files/shiny.min.css" rel="stylesheet">
+<link href="./Shiny App_files/busy-indicators.css" rel="stylesheet">
+<script src="./Shiny App_files/shiny.min.js.download"></script>  <script src="./Shiny App_files/rmd_loader.js.download"></script>
+  <link href="./Shiny App_files/rmd_loader.css" rel="stylesheet">
+<script src="./Shiny App_files/header-attrs.js.download"></script><meta name="viewport" content="width=device-width, initial-scale=1"><link href="./Shiny App_files/bootstrap.min.css" rel="stylesheet" type="text/css"><script src="./Shiny App_files/bootstrap.min.js.download"></script><script src="./Shiny App_files/html5shiv.min.js.download"></script><script src="./Shiny App_files/respond.min.js.download"></script><style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style><script src="./Shiny App_files/tabsets.js.download"></script><link href="./Shiny App_files/default.css" rel="stylesheet" type="text/css"><script src="./Shiny App_files/highlight.js.download"></script><link href="./Shiny App_files/rmd_perf.css" rel="stylesheet" type="text/css"><script src="./Shiny App_files/rmd_perf.js.download"></script><meta name="rstudio_origin" content="127.0.0.1:33439"><script src="./Shiny App_files/rsiframe.js.download"></script>
+
+
+<meta name="generator" content="pandoc">
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE">
+
+
+
+<meta name="date" content="2026-02-22">
+
+<title>Shiny App</title>
+
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type="text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+<script type="text/javascript" src="./Shiny App_files/MathJax.js.download"></script><style type="text/css">.MathJax_Hover_Frame {border-radius: .25em; -webkit-border-radius: .25em; -moz-border-radius: .25em; -khtml-border-radius: .25em; box-shadow: 0px 0px 15px #83A; -webkit-box-shadow: 0px 0px 15px #83A; -moz-box-shadow: 0px 0px 15px #83A; -khtml-box-shadow: 0px 0px 15px #83A; border: 1px solid #A6D ! important; display: inline-block; position: absolute}
+.MathJax_Menu_Button .MathJax_Hover_Arrow {position: absolute; cursor: pointer; display: inline-block; border: 2px solid #AAA; border-radius: 4px; -webkit-border-radius: 4px; -moz-border-radius: 4px; -khtml-border-radius: 4px; font-family: 'Courier New',Courier; font-size: 9px; color: #F0F0F0}
+.MathJax_Menu_Button .MathJax_Hover_Arrow span {display: block; background-color: #AAA; border: 1px solid; border-radius: 3px; line-height: 0; padding: 4px}
+.MathJax_Hover_Arrow:hover {color: white!important; border: 2px solid #CCC!important}
+.MathJax_Hover_Arrow:hover span {background-color: #CCC!important}
+</style><style type="text/css">#MathJax_About {position: fixed; left: 50%; width: auto; text-align: center; border: 3px outset; padding: 1em 2em; background-color: #DDDDDD; color: black; cursor: default; font-family: message-box; font-size: 120%; font-style: normal; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; z-index: 201; border-radius: 15px; -webkit-border-radius: 15px; -moz-border-radius: 15px; -khtml-border-radius: 15px; box-shadow: 0px 10px 20px #808080; -webkit-box-shadow: 0px 10px 20px #808080; -moz-box-shadow: 0px 10px 20px #808080; -khtml-box-shadow: 0px 10px 20px #808080; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+#MathJax_About.MathJax_MousePost {outline: none}
+.MathJax_Menu {position: absolute; background-color: white; color: black; width: auto; padding: 2px; border: 1px solid #CCCCCC; margin: 0; cursor: default; font: menu; text-align: left; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; z-index: 201; box-shadow: 0px 10px 20px #808080; -webkit-box-shadow: 0px 10px 20px #808080; -moz-box-shadow: 0px 10px 20px #808080; -khtml-box-shadow: 0px 10px 20px #808080; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+.MathJax_MenuItem {padding: 2px 2em; background: transparent}
+.MathJax_MenuArrow {position: absolute; right: .5em; padding-top: .25em; color: #666666; font-size: .75em}
+.MathJax_MenuActive .MathJax_MenuArrow {color: white}
+.MathJax_MenuArrow.RTL {left: .5em; right: auto}
+.MathJax_MenuCheck {position: absolute; left: .7em}
+.MathJax_MenuCheck.RTL {right: .7em; left: auto}
+.MathJax_MenuRadioCheck {position: absolute; left: 1em}
+.MathJax_MenuRadioCheck.RTL {right: 1em; left: auto}
+.MathJax_MenuLabel {padding: 2px 2em 4px 1.33em; font-style: italic}
+.MathJax_MenuRule {border-top: 1px solid #CCCCCC; margin: 4px 1px 0px}
+.MathJax_MenuDisabled {color: GrayText}
+.MathJax_MenuActive {background-color: Highlight; color: HighlightText}
+.MathJax_MenuDisabled:focus, .MathJax_MenuLabel:focus {background-color: #E8E8E8}
+.MathJax_ContextMenu:focus {outline: none}
+.MathJax_ContextMenu .MathJax_MenuItem:focus {outline: none}
+#MathJax_AboutClose {top: .2em; right: .2em}
+.MathJax_Menu .MathJax_MenuClose {top: -10px; left: -10px}
+.MathJax_MenuClose {position: absolute; cursor: pointer; display: inline-block; border: 2px solid #AAA; border-radius: 18px; -webkit-border-radius: 18px; -moz-border-radius: 18px; -khtml-border-radius: 18px; font-family: 'Courier New',Courier; font-size: 24px; color: #F0F0F0}
+.MathJax_MenuClose span {display: block; background-color: #AAA; border: 1.5px solid; border-radius: 18px; -webkit-border-radius: 18px; -moz-border-radius: 18px; -khtml-border-radius: 18px; line-height: 0; padding: 8px 0 6px}
+.MathJax_MenuClose:hover {color: white!important; border: 2px solid #CCC!important}
+.MathJax_MenuClose:hover span {background-color: #CCC!important}
+.MathJax_MenuClose:hover:focus {outline: none}
+</style><style type="text/css">.MathJax_Preview .MJXf-math {color: inherit!important}
+</style><style type="text/css">.MJX_Assistive_MathML {position: absolute!important; top: 0; left: 0; clip: rect(1px, 1px, 1px, 1px); padding: 1px 0 0 0!important; border: 0!important; height: 1px!important; width: 1px!important; overflow: hidden!important; display: block!important; -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none}
+.MJX_Assistive_MathML.MJX_Assistive_MathML_Block {width: 100%!important}
+</style><style type="text/css">#MathJax_Zoom {position: absolute; background-color: #F0F0F0; overflow: auto; display: block; z-index: 301; padding: .5em; border: 1px solid black; margin: 0; font-weight: normal; font-style: normal; text-align: left; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; -webkit-box-sizing: content-box; -moz-box-sizing: content-box; box-sizing: content-box; box-shadow: 5px 5px 15px #AAAAAA; -webkit-box-shadow: 5px 5px 15px #AAAAAA; -moz-box-shadow: 5px 5px 15px #AAAAAA; -khtml-box-shadow: 5px 5px 15px #AAAAAA; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+#MathJax_ZoomOverlay {position: absolute; left: 0; top: 0; z-index: 300; display: inline-block; width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background-color: white; opacity: 0; filter: alpha(opacity=0)}
+#MathJax_ZoomFrame {position: relative; display: inline-block; height: 0; width: 0}
+#MathJax_ZoomEventTrap {position: absolute; left: 0; top: 0; z-index: 302; display: inline-block; border: 0; padding: 0; margin: 0; background-color: white; opacity: 0; filter: alpha(opacity=0)}
+</style><style type="text/css">.MathJax_Preview {color: #888; display: contents}
+#MathJax_Message {position: fixed; left: 1em; bottom: 1.5em; background-color: #E6E6E6; border: 1px solid #959595; margin: 0px; padding: 2px 8px; z-index: 102; color: black; font-size: 80%; width: auto; white-space: nowrap}
+#MathJax_MSIE_Frame {position: absolute; top: 0; left: 0; width: 0px; z-index: 101; border: 0px; margin: 0px; padding: 0px}
+.MathJax_Error {color: #CC0000; font-style: italic}
+</style><style type="text/css">.MJXp-script {font-size: .8em}
+.MJXp-right {-webkit-transform-origin: right; -moz-transform-origin: right; -ms-transform-origin: right; -o-transform-origin: right; transform-origin: right}
+.MJXp-bold {font-weight: bold}
+.MJXp-italic {font-style: italic}
+.MJXp-scr {font-family: MathJax_Script,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-frak {font-family: MathJax_Fraktur,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-sf {font-family: MathJax_SansSerif,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-cal {font-family: MathJax_Caligraphic,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-mono {font-family: MathJax_Typewriter,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-largeop {font-size: 150%}
+.MJXp-largeop.MJXp-int {vertical-align: -.2em}
+.MJXp-math {display: inline-block; line-height: 1.2; text-indent: 0; font-family: 'Times New Roman',Times,STIXGeneral,serif; white-space: nowrap; border-collapse: collapse}
+.MJXp-display {display: block; text-align: center; margin: 1em 0}
+.MJXp-math span {display: inline-block}
+.MJXp-box {display: block!important; text-align: center}
+.MJXp-box:after {content: " "}
+.MJXp-rule {display: block!important; margin-top: .1em}
+.MJXp-char {display: block!important}
+.MJXp-mo {margin: 0 .15em}
+.MJXp-mfrac {margin: 0 .125em; vertical-align: .25em}
+.MJXp-denom {display: inline-table!important; width: 100%}
+.MJXp-denom > * {display: table-row!important}
+.MJXp-surd {vertical-align: top}
+.MJXp-surd > * {display: block!important}
+.MJXp-script-box > *  {display: table!important; height: 50%}
+.MJXp-script-box > * > * {display: table-cell!important; vertical-align: top}
+.MJXp-script-box > *:last-child > * {vertical-align: bottom}
+.MJXp-script-box > * > * > * {display: block!important}
+.MJXp-mphantom {visibility: hidden}
+.MJXp-munderover, .MJXp-munder {display: inline-table!important}
+.MJXp-over {display: inline-block!important; text-align: center}
+.MJXp-over > * {display: block!important}
+.MJXp-munderover > *, .MJXp-munder > * {display: table-row!important}
+.MJXp-mtable {vertical-align: .25em; margin: 0 .125em}
+.MJXp-mtable > * {display: inline-table!important; vertical-align: middle}
+.MJXp-mtr {display: table-row!important}
+.MJXp-mtd {display: table-cell!important; text-align: center; padding: .5em 0 0 .5em}
+.MJXp-mtr > .MJXp-mtd:first-child {padding-left: 0}
+.MJXp-mtr:first-child > .MJXp-mtd {padding-top: 0}
+.MJXp-mlabeledtr {display: table-row!important}
+.MJXp-mlabeledtr > .MJXp-mtd:first-child {padding-left: 0}
+.MJXp-mlabeledtr:first-child > .MJXp-mtd {padding-top: 0}
+.MJXp-merror {background-color: #FFFF88; color: #CC0000; border: 1px solid #CC0000; padding: 1px 3px; font-style: normal; font-size: 90%}
+.MJXp-scale0 {-webkit-transform: scaleX(.0); -moz-transform: scaleX(.0); -ms-transform: scaleX(.0); -o-transform: scaleX(.0); transform: scaleX(.0)}
+.MJXp-scale1 {-webkit-transform: scaleX(.1); -moz-transform: scaleX(.1); -ms-transform: scaleX(.1); -o-transform: scaleX(.1); transform: scaleX(.1)}
+.MJXp-scale2 {-webkit-transform: scaleX(.2); -moz-transform: scaleX(.2); -ms-transform: scaleX(.2); -o-transform: scaleX(.2); transform: scaleX(.2)}
+.MJXp-scale3 {-webkit-transform: scaleX(.3); -moz-transform: scaleX(.3); -ms-transform: scaleX(.3); -o-transform: scaleX(.3); transform: scaleX(.3)}
+.MJXp-scale4 {-webkit-transform: scaleX(.4); -moz-transform: scaleX(.4); -ms-transform: scaleX(.4); -o-transform: scaleX(.4); transform: scaleX(.4)}
+.MJXp-scale5 {-webkit-transform: scaleX(.5); -moz-transform: scaleX(.5); -ms-transform: scaleX(.5); -o-transform: scaleX(.5); transform: scaleX(.5)}
+.MJXp-scale6 {-webkit-transform: scaleX(.6); -moz-transform: scaleX(.6); -ms-transform: scaleX(.6); -o-transform: scaleX(.6); transform: scaleX(.6)}
+.MJXp-scale7 {-webkit-transform: scaleX(.7); -moz-transform: scaleX(.7); -ms-transform: scaleX(.7); -o-transform: scaleX(.7); transform: scaleX(.7)}
+.MJXp-scale8 {-webkit-transform: scaleX(.8); -moz-transform: scaleX(.8); -ms-transform: scaleX(.8); -o-transform: scaleX(.8); transform: scaleX(.8)}
+.MJXp-scale9 {-webkit-transform: scaleX(.9); -moz-transform: scaleX(.9); -ms-transform: scaleX(.9); -o-transform: scaleX(.9); transform: scaleX(.9)}
+.MathJax_PHTML .noError {vertical-align: ; font-size: 90%; text-align: left; color: black; padding: 1px 3px; border: 1px solid}
+</style></head>
+<body><div id="MathJax_Message" style="display: none;"></div>
+  <div>
+    <div class="shiny-panel-conditional" data-display-if="!output.__reactivedoc__" data-ns-prefix="" style="display: none;">
+      <div id="rmd_loader_wrapper">
+        <div id="rmd_loader" style="">
+          <p>Please wait...</p>
+          <img src="./Shiny App_files/rmd_loader.gif">
+        </div>
+      </div>
+    </div>
+    <div id="__reactivedoc__" class="shiny-html-output shiny-bound-output" aria-live="polite">
+
+
+
+
+
+
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div id="section-header">
+
+
+
+<h1 class="title toc-ignore">Shiny App</h1>
+<h4 class="date">2026-02-22</h4>
+
+</div>
+
+
+<pre class="r"><code class="hljs"><span class="hljs-comment">#GCW1 — Shiny App: Tree-Based Methods for Heart Disease</span>
+<span class="hljs-comment">#Dataset: Cleveland Heart Disease Dataset (UCI / Kaggle)</span>
+
+<span class="hljs-comment">#This application predicts the presence of heart disease using</span>
+<span class="hljs-comment">#two tree-based machine learning models:</span>
+<span class="hljs-comment">#1. Decision Tree</span>
+<span class="hljs-comment">#2. Random Forest</span>
+
+<span class="hljs-comment">#The Shiny interface allows users to:</span>
+<span class="hljs-comment">#• Select the model</span>
+<span class="hljs-comment">#• Adjust model parameters</span>
+<span class="hljs-comment">#• Visualise model structure</span>
+<span class="hljs-comment">#• Evaluate predictive performance</span>
+
+<span class="hljs-comment">#The aim is to demonstrate how interpretable ML methods can be</span>
+<span class="hljs-comment">#applied to healthcare data.</span>
+
+<span class="hljs-comment"># LOAD REQUIRED LIBRARIES</span>
+<span class="hljs-comment"># shiny        → Build interactive web applications in R</span>
+<span class="hljs-comment"># rpart        → Decision tree algorithm</span>
+<span class="hljs-comment"># rpart.plot   → Visualisation of decision trees</span>
+<span class="hljs-comment"># randomForest → Ensemble tree-based model</span>
+<span class="hljs-comment"># ggplot2      → General plotting library</span>
+<span class="hljs-comment"># dplyr        → Data manipulation</span>
+<span class="hljs-comment"># corrplot     → Correlation visualisation (optional)</span>
+
+<span class="hljs-keyword">library</span>(shiny)
+<span class="hljs-keyword">library</span>(rpart)
+<span class="hljs-keyword">library</span>(rpart.plot)
+<span class="hljs-keyword">library</span>(randomForest)
+<span class="hljs-keyword">library</span>(ggplot2)
+<span class="hljs-keyword">library</span>(dplyr)
+<span class="hljs-keyword">library</span>(corrplot)
+
+<span class="hljs-comment">#LOAD AND CLEAN DATA</span>
+
+<span class="hljs-comment">#Read the Cleveland heart disease dataset.</span>
+<span class="hljs-comment">#Missing values are coded as "?" and converted to NA.</span>
+
+heart &lt;- read.csv(
+  <span class="hljs-string">"processed.cleveland.data.csv"</span>,
+  header = <span class="hljs-literal">FALSE</span>,
+  na.strings = <span class="hljs-string">"?"</span>
+)
+
+<span class="hljs-comment">#Assign meaningful column names based on dataset documentation</span>
+
+colnames(heart) &lt;- c(
+  <span class="hljs-string">"age"</span>,       <span class="hljs-comment"># Age in years</span>
+  <span class="hljs-string">"sex"</span>,       <span class="hljs-comment"># Biological sex</span>
+  <span class="hljs-string">"cp"</span>,        <span class="hljs-comment"># Chest pain type</span>
+  <span class="hljs-string">"trestbps"</span>,  <span class="hljs-comment"># Resting blood pressure</span>
+  <span class="hljs-string">"chol"</span>,      <span class="hljs-comment"># Serum cholesterol</span>
+  <span class="hljs-string">"fbs"</span>,       <span class="hljs-comment"># Fasting blood sugar &gt; 120 mg/dl</span>
+  <span class="hljs-string">"restecg"</span>,   <span class="hljs-comment"># Resting ECG results</span>
+  <span class="hljs-string">"thalach"</span>,   <span class="hljs-comment"># Maximum heart rate achieved</span>
+  <span class="hljs-string">"exang"</span>,     <span class="hljs-comment"># Exercise-induced angina</span>
+  <span class="hljs-string">"oldpeak"</span>,   <span class="hljs-comment"># ST depression induced by exercise</span>
+  <span class="hljs-string">"slope"</span>,     <span class="hljs-comment"># Slope of peak exercise ST segment</span>
+  <span class="hljs-string">"ca"</span>,        <span class="hljs-comment"># Number of major vessels</span>
+  <span class="hljs-string">"thal"</span>,      <span class="hljs-comment"># Thalassemia test result</span>
+  <span class="hljs-string">"target"</span>     <span class="hljs-comment"># Heart disease diagnosis</span>
+)
+
+<span class="hljs-comment">#Convert target to binary classification:</span>
+<span class="hljs-comment">#0 = no disease, 1 = presence of disease</span>
+
+heart$target &lt;- ifelse(heart$target &gt; <span class="hljs-number">0</span>, <span class="hljs-number">1</span>, <span class="hljs-number">0</span>)
+
+<span class="hljs-comment">#Remove rows containing missing values to ensure models</span>
+<span class="hljs-comment">#are trained on complete observations</span>
+
+heart &lt;- na.omit(heart)
+
+
+
+<span class="hljs-comment">#CONVERT VARIABLE TYPES</span>
+
+<span class="hljs-comment">#Categorical variables must be factors so that tree models</span>
+<span class="hljs-comment">#treat them as discrete predictors rather than numeric values</span>
+
+factor_vars &lt;- c(
+  <span class="hljs-string">"sex"</span>, <span class="hljs-string">"cp"</span>, <span class="hljs-string">"fbs"</span>, <span class="hljs-string">"restecg"</span>,
+  <span class="hljs-string">"exang"</span>, <span class="hljs-string">"slope"</span>, <span class="hljs-string">"ca"</span>, <span class="hljs-string">"thal"</span>, <span class="hljs-string">"target"</span>
+)
+
+heart[factor_vars] &lt;- lapply(heart[factor_vars], as.factor)
+
+<span class="hljs-comment">#Ensure continuous variables are numeric (safety step)</span>
+
+numeric_vars &lt;- c(<span class="hljs-string">"age"</span>, <span class="hljs-string">"trestbps"</span>, <span class="hljs-string">"chol"</span>, <span class="hljs-string">"thalach"</span>, <span class="hljs-string">"oldpeak"</span>)
+
+<span class="hljs-keyword">for</span> (col <span class="hljs-keyword">in</span> numeric_vars) {
+  heart[[col]] &lt;- suppressWarnings(
+    as.numeric(as.character(heart[[col]]))
+  )
+}
+
+<span class="hljs-comment">#Remove any rows that became NA during conversion</span>
+
+heart &lt;- na.omit(heart)
+
+
+<span class="hljs-comment">#TRAIN / TEST SPLIT</span>
+
+<span class="hljs-comment">#Split the dataset into:</span>
+<span class="hljs-comment">#• Training set (70%) for model fitting</span>
+<span class="hljs-comment">#• Test set (30%) for unbiased evaluation</span>
+
+set.seed(<span class="hljs-number">123</span>)  <span class="hljs-comment"># Ensures reproducibility</span>
+
+train_index &lt;- sample(
+  seq_len(nrow(heart)),
+  size = <span class="hljs-number">0.7</span> * nrow(heart)
+)
+
+train &lt;- heart[train_index, ]
+test  &lt;- heart[-train_index, ]
+
+
+<span class="hljs-comment">#SHINY USER INTERFACE</span>
+
+ui &lt;- fluidPage(
+  
+  titlePanel(<span class="hljs-string">"Heart Disease Prediction Using Tree-Based Methods"</span>),
+  
+  sidebarLayout(
+    
+    sidebarPanel(
+      
+      h3(<span class="hljs-string">"Model Controls"</span>),
+      
+      <span class="hljs-comment">#User selects which model to use</span>
+      selectInput(
+        <span class="hljs-string">"model_type"</span>,
+        <span class="hljs-string">"Choose Model:"</span>,
+        choices = c(<span class="hljs-string">"Decision Tree"</span>, <span class="hljs-string">"Random Forest"</span>)
+      ),
+      
+      <span class="hljs-comment">#Controls pruning strength for the decision tree</span>
+      sliderInput(
+        <span class="hljs-string">"cp"</span>,
+        <span class="hljs-string">"Tree Complexity (Decision Tree)"</span>,
+        min = <span class="hljs-number">0.001</span>,
+        max = <span class="hljs-number">0.1</span>,
+        value = <span class="hljs-number">0.01</span>,
+        step = <span class="hljs-number">0.005</span>
+      ),
+      
+      <span class="hljs-comment">#Controls number of trees in the random forest</span>
+      numericInput(
+        <span class="hljs-string">"ntree"</span>,
+        <span class="hljs-string">"Number of Trees (Random Forest)"</span>,
+        value = <span class="hljs-number">100</span>,
+        min = <span class="hljs-number">50</span>,
+        max = <span class="hljs-number">500</span>
+      )
+    ),
+    
+    mainPanel(
+      
+      tabsetPanel(
+        
+        <span class="hljs-comment">#Visual output of models</span>
+        tabPanel(
+          <span class="hljs-string">"Model Visualisation"</span>,
+          plotOutput(<span class="hljs-string">"modelPlot"</span>)
+        ),
+        
+        <span class="hljs-comment">#Performance evaluation</span>
+        tabPanel(
+          <span class="hljs-string">"Model Performance"</span>,
+          verbatimTextOutput(<span class="hljs-string">"performance"</span>)
+        ),
+        
+        <span class="hljs-comment">#Explanatory text for non-technical users</span>
+        tabPanel(
+          <span class="hljs-string">"Explanation"</span>,
+          
+          h4(<span class="hljs-string">"How Tree-Based Methods Work"</span>),
+          
+          p(<span class="hljs-string">"Decision trees classify patients using a sequence of rules."</span>),
+          p(<span class="hljs-string">"Random forests combine many trees to improve accuracy and reduce overfitting."</span>),
+          
+          h4(<span class="hljs-string">"Key Predictors of Heart Disease"</span>),
+          verbatimTextOutput(<span class="hljs-string">"insights"</span>)
+        )
+      )
+    )
+  )
+)
+
+
+
+<span class="hljs-comment">#SHINY SERVER LOGIC</span>
+
+server &lt;- <span class="hljs-keyword">function</span>(input, output) {
+  
+
+<span class="hljs-comment">#DECISION TREE MODEL</span>
+
+  
+  tree_model &lt;- reactive({
+    
+    <span class="hljs-comment">#Train a decision tree classifier</span>
+    <span class="hljs-comment">#cp controls pruning to avoid overfitting</span>
+    
+    rpart(
+      target ~ .,
+      data = train,
+      method = <span class="hljs-string">"class"</span>,
+      control = rpart.control(cp = input$cp)
+    )
+  })
+  
+  
+ 
+<span class="hljs-comment">#RANDOM FOREST MODEL</span>
+  
+  
+  rf_model &lt;- reactive({
+    
+    <span class="hljs-comment">#Train an ensemble of decision trees.</span>
+    <span class="hljs-comment">#Importance = TRUE enables feature importance scores.</span>
+    
+    randomForest(
+      target ~ .,
+      data = train,
+      ntree = input$ntree,
+      importance = <span class="hljs-literal">TRUE</span>
+    )
+  })
+  
+  
+<span class="hljs-comment">#MODEL VISUALISATION</span>
+
+  
+  output$modelPlot &lt;- renderPlot({
+    
+    <span class="hljs-keyword">if</span> (input$model_type == <span class="hljs-string">"Decision Tree"</span>) {
+      
+      <span class="hljs-comment">#Display tree structure</span>
+      
+      rpart.plot(
+        tree_model(),
+        type = <span class="hljs-number">2</span>,
+        extra = <span class="hljs-number">104</span>,
+        fallen.leaves = <span class="hljs-literal">TRUE</span>,
+        main = <span class="hljs-string">"Decision Tree for Heart Disease"</span>
+      )
+      
+    } <span class="hljs-keyword">else</span> {
+      
+      <span class="hljs-comment">#Display variable importance for Random Forest</span>
+      
+      varImpPlot(
+        rf_model(),
+        main = <span class="hljs-string">"Variable Importance (Random Forest)"</span>
+      )
+    }
+  })
+  
+  
+
+<span class="hljs-comment">#MODEL PERFORMANCE</span>
+  
+  output$performance &lt;- renderPrint({
+    
+    <span class="hljs-comment">#Generate predictions on unseen test data</span>
+    
+    <span class="hljs-keyword">if</span> (input$model_type == <span class="hljs-string">"Decision Tree"</span>) {
+      preds &lt;- predict(tree_model(), test, type = <span class="hljs-string">"class"</span>)
+    } <span class="hljs-keyword">else</span> {
+      preds &lt;- predict(rf_model(), test)
+    }
+    
+    <span class="hljs-comment">#Confusion matrix summarises classification results</span>
+    
+    cm &lt;- table(Predicted = preds, Actual = test$target)
+    
+    cat(<span class="hljs-string">"Confusion Matrix:\n\n"</span>)
+    print(cm)
+    
+    <span class="hljs-comment">#Calculate overall accuracy</span>
+    
+    accuracy &lt;- sum(diag(cm)) / sum(cm)
+    
+    cat(<span class="hljs-string">"\nOverall Accuracy:"</span>, round(accuracy, <span class="hljs-number">3</span>))
+  })
+  
+  
+
+<span class="hljs-comment">#VARIABLE IMPORTANCE</span>
+  
+  output$insights &lt;- renderPrint({
+    
+    <span class="hljs-keyword">if</span> (input$model_type == <span class="hljs-string">"Random Forest"</span>) {
+      
+      <span class="hljs-comment">#Extract importance scores</span>
+      
+      imp &lt;- importance(rf_model())
+      
+      imp &lt;- imp[complete.cases(imp), , drop = <span class="hljs-literal">FALSE</span>]
+      
+      <span class="hljs-comment"># Identify top predictors</span>
+      
+      top_vars &lt;- names(
+        sort(imp[, <span class="hljs-string">"MeanDecreaseGini"</span>], decreasing = <span class="hljs-literal">TRUE</span>)
+      )[<span class="hljs-number">1</span>:<span class="hljs-number">3</span>]
+      
+      cat(<span class="hljs-string">"The three most important predictors are:\n\n"</span>)
+      print(top_vars)
+      
+      cat(<span class="hljs-string">"\nThese variables have the strongest influence on predictions."</span>)
+      
+    } <span class="hljs-keyword">else</span> {
+      
+      cat(<span class="hljs-string">"Variable importance is available only for Random Forest.\n"</span>)
+      cat(<span class="hljs-string">"For Decision Trees, you can interpret important features by 
+          examining the tree structure in the 'Model Visualisation' tab. 
+          Features near the top of the tree generally have the largest 
+          influence on the prediction"</span>)
+    }
+  })
+}
+
+
+<span class="hljs-comment">#RUN SHINY APPLICATION</span>
+shinyApp(ui = ui, server = server)</code></pre>
+<iframe width="100%" height="400" class="shiny-frame" src="./Shiny App_files/saved_resource.html"></iframe>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("section-TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "mathjax-local/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+
+</div>
+  </div>
+
+
+</body></html>
