@@ -1,0 +1,44 @@
+# Folders
+.vscode/*
+
+# user settings
+.*DS_Store/*
+.DS_Store
+.Rproj.user
+*.Rproj
+
+# file types
+*.pdf
+*.html
+*.csv
+.RData
+.Rhistory
+*.tex
+*.aux
+*.log
+*.synctex*
+*.css
+*.xlsx
+*.doc*
+*.ppt*
+*.dfc*
+*.svg
+
+# files
+*.fdb_latexmk
+*.aux
+*.log
+*.synctex.gz
+*.bbl
+*.fls
+*.toc
+*.xdv
+*.blg
+
+peer-assessment/*
+
+# cached files
+figure-testing.R
+HSI20180101to20241231.csv
+*.dcf
+20260209-power-utility-theory-query.png
