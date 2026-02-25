@@ -1,5 +1,6 @@
 # Folders
 .vscode/*
+.venv
 
 # user settings
 .*DS_Store/*
