@@ -638,27 +638,67 @@ ui <- page_navbar(
   # XTBoosted
   # ================
   nav_panel(
-    "XT Boosted",
+    "XG Boosted",
     layout_sidebar(
       sidebar = sidebar(
-        h5("Patient inputs"),
-        actionButton("btn_explain", "Explain my path", class = "btn-primary"),
+        h5("Tree controls"),
+        sliderInput(
+          "tree_cp",
+          "Complexity (cp)",
+          min = 0.001,
+          max = 0.08,
+          value = 0.01,
+          step = 0.001
+        ),
+        sliderInput(
+          "tree_maxdepth",
+          "Max depth",
+          min = 1,
+          max = 10,
+          value = 4,
+          step = 1
+        ),
+        sliderInput(
+          "tree_minsplit",
+          "Min split",
+          min = 2,
+          max = 60,
+          value = 20,
+          step = 1
+        ),
         hr(),
+        h5("Decision rule threshold"),
+        sliderInput(
+          "threshold",
+          "Probability cutoff for class=1",
+          min = 0.05,
+          max = 0.95,
+          value = 0.50,
+          step = 0.05
+        ),
         helpText(
-          "Click the button to generate the prediction and the exact decision rules used by the tree."
+          "Lower cutoff = more positives predicted (higher sensitivity)."
         )
       ),
       layout_column_wrap(
         width = 1,
         card(
           class = "shadow-sm",
-          card_header(tags$strong("Prediction summary")),
-          uiOutput("patient_summary_ui")
+          card_header(tags$strong("Decision tree (flowchart of rules)")),
+          plotOutput("plot_tree", height = 560)
+        )
+      ),
+      layout_column_wrap(
+        width = 1 / 2,
+        card(
+          class = "shadow-sm",
+          card_header(tags$strong("Tree performance")),
+          verbatimTextOutput("tree_perf")
         ),
         card(
           class = "shadow-sm",
-          card_header(tags$strong("Step-by-step decision path")),
-          uiOutput("patient_path_ui")
+          card_header(tags$strong("ROC curve")),
+          plotOutput("plot_tree_roc", height = 320)
         )
       )
     )
