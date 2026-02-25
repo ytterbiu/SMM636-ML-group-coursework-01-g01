@@ -258,7 +258,11 @@ theme_gc <- bs_theme(
   version = 5,
   bootswatch = "cosmo",
   base_font = font_google("Inter"),
-  heading_font = font_google("Inter")
+  heading_font = font_google("Inter"),
+  # You can still override specific colors from the 'cosmo' theme:
+  primary = "#EA4C89",
+  bg = "#ffffff",
+  fg = "#333333"
 )
 
 ui <- page_navbar(
@@ -353,84 +357,6 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         h5("Patient inputs"),
-        numericInput("p_age", "Age", value = 55, min = 1, max = 120),
-        selectInput(
-          "p_sex",
-          "Sex (0=female, 1=male)",
-          choices = levels(train$sex),
-          selected = levels(train$sex)[1]
-        ),
-        selectInput(
-          "p_cp",
-          "Chest pain type (cp)",
-          choices = levels(train$cp),
-          selected = levels(train$cp)[1]
-        ),
-        numericInput(
-          "p_trestbps",
-          "Resting BP (trestbps)",
-          value = 130,
-          min = 50,
-          max = 260
-        ),
-        numericInput(
-          "p_chol",
-          "Cholesterol (chol)",
-          value = 240,
-          min = 50,
-          max = 700
-        ),
-        selectInput(
-          "p_fbs",
-          "Fasting blood sugar >120 (fbs)",
-          choices = levels(train$fbs),
-          selected = levels(train$fbs)[1]
-        ),
-        selectInput(
-          "p_restecg",
-          "Resting ECG (restecg)",
-          choices = levels(train$restecg),
-          selected = levels(train$restecg)[1]
-        ),
-        numericInput(
-          "p_thalach",
-          "Max heart rate (thalach)",
-          value = 150,
-          min = 50,
-          max = 260
-        ),
-        selectInput(
-          "p_exang",
-          "Exercise angina (exang)",
-          choices = levels(train$exang),
-          selected = levels(train$exang)[1]
-        ),
-        numericInput(
-          "p_oldpeak",
-          "Oldpeak",
-          value = 1.0,
-          min = 0,
-          max = 10,
-          step = 0.1
-        ),
-        selectInput(
-          "p_slope",
-          "ST slope (slope)",
-          choices = levels(train$slope),
-          selected = levels(train$slope)[1]
-        ),
-        selectInput(
-          "p_ca",
-          "Major vessels (ca)",
-          choices = levels(train$ca),
-          selected = levels(train$ca)[1]
-        ),
-        selectInput(
-          "p_thal",
-          "Thal (thal)",
-          choices = levels(train$thal),
-          selected = levels(train$thal)[1]
-        ),
         actionButton("btn_explain", "Explain my path", class = "btn-primary"),
         hr(),
         helpText(
@@ -703,6 +629,36 @@ ui <- page_navbar(
           class = "shadow-sm",
           card_header(tags$strong("ROC curve (Random Forest)")),
           plotOutput("plot_rf_roc", height = 320)
+        )
+      )
+    )
+  ),
+
+  # ================
+  # XTBoosted
+  # ================
+  nav_panel(
+    "XT Boosted",
+    layout_sidebar(
+      sidebar = sidebar(
+        h5("Patient inputs"),
+        actionButton("btn_explain", "Explain my path", class = "btn-primary"),
+        hr(),
+        helpText(
+          "Click the button to generate the prediction and the exact decision rules used by the tree."
+        )
+      ),
+      layout_column_wrap(
+        width = 1,
+        card(
+          class = "shadow-sm",
+          card_header(tags$strong("Prediction summary")),
+          uiOutput("patient_summary_ui")
+        ),
+        card(
+          class = "shadow-sm",
+          card_header(tags$strong("Step-by-step decision path")),
+          uiOutput("patient_path_ui")
         )
       )
     )
