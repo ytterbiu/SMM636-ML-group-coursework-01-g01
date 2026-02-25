@@ -1,8 +1,8 @@
 # app.R
 # ==========================================
-# GCW1 — BEST FINAL VERSION (R only, marking-proof)
+# GCW1 — FINAL (cleaner + more presentable Overview)
 # Tree-Based Methods for Heart Disease (Explainer-style)
-# Inspired by: mlu-explain decision tree + jbkunst educational Shiny
+# R only, marking-proof, robust error handling
 #
 # HOW TO RUN:
 # 1) Put processed.cleveland.data.csv in the SAME folder as this app.R
@@ -61,29 +61,25 @@ load_heart_data <- function(path) {
     "oldpeak","slope","ca","thal","target"
   )
   
-  # Binary target: 0=no disease, 1=disease
   heart$target <- ifelse(heart$target > 0, 1, 0)
   
-  # Safe numeric conversion
   numeric_vars <- c("age","trestbps","chol","thalach","oldpeak")
   for (col in numeric_vars) {
     heart[[col]] <- suppressWarnings(as.numeric(as.character(heart[[col]])))
   }
   
-  # Factors (including target)
   factor_vars <- c("sex","cp","fbs","restecg","exang","slope","ca","thal","target")
   heart[factor_vars] <- lapply(heart[factor_vars], function(x) as.factor(x))
   
   heart <- na.omit(heart)
   heart$target <- factor(heart$target, levels = c("0","1"))
-  
   heart
 }
 
 heart <- load_heart_data(get_data_path())
 
 # -------------------------
-# 2) TRAIN / TEST (STRATIFIED to avoid ROC errors)
+# 2) TRAIN / TEST (STRATIFIED)
 # -------------------------
 set.seed(123)
 idx0 <- which(heart$target == "0")
@@ -127,11 +123,7 @@ compute_metrics <- function(actual, pred_class, pred_prob) {
 safe_plot_roc <- function(roc_obj, auc_val, title_text) {
   if (is.null(roc_obj) || is.na(auc_val)) {
     plot.new()
-    text(
-      0.5, 0.5,
-      "ROC not available.\n(Needs both classes in test set and non-constant probabilities.)",
-      cex = 1
-    )
+    text(0.5, 0.5, "ROC not available.\n(Needs both classes + non-constant probabilities.)", cex = 1)
     title(title_text)
     return(invisible())
   }
@@ -140,7 +132,7 @@ safe_plot_roc <- function(roc_obj, auc_val, title_text) {
 }
 
 # -------------------------
-# 4) EXPLAINER HELPERS (mlu-explain vibe)
+# 4) EXPLAINER HELPERS
 # -------------------------
 feature_dictionary <- function() {
   data.frame(
@@ -156,8 +148,8 @@ feature_dictionary <- function() {
       "Maximum heart rate achieved",
       "Exercise induced angina (1=yes, 0=no)",
       "ST depression induced by exercise relative to rest",
-      "Slope of the peak exercise ST segment (categorical)",
-      "Number of major vessels (0–3) colored by fluoroscopy",
+      "Slope of peak exercise ST segment (categorical)",
+      "Major vessels (0–3) colored by fluoroscopy",
       "Thalassemia test result (categorical code)"
     ),
     stringsAsFactors = FALSE
@@ -172,64 +164,125 @@ pretty_rule <- function(x) {
   trimws(x)
 }
 
-get_tree_path_rules <- function(model, one_row) {
-  p <- path.rpart(model, newdata = one_row)
-  rules <- unlist(p)
-  if (length(rules) >= 1 && grepl("root", rules[1], ignore.case = TRUE)) rules <- rules[-1]
-  pretty_rule(rules)
+get_tree_path_rules_safe <- function(model, one_row) {
+  tryCatch({
+    p <- path.rpart(model, newdata = one_row)
+    rules <- unlist(p)
+    if (length(rules) >= 1 && grepl("root", rules[1], ignore.case = TRUE)) rules <- rules[-1]
+    pretty_rule(rules)
+  }, error = function(e) character(0))
+}
+
+get_prob1_safe <- function(prob_matrix) {
+  cn <- colnames(prob_matrix)
+  if (!is.null(cn) && "1" %in% cn) return(prob_matrix[, "1"])
+  if (ncol(prob_matrix) >= 2) return(prob_matrix[, ncol(prob_matrix)])
+  as.numeric(prob_matrix[, 1])
 }
 
 # -------------------------
-# 5) UI (Explainer layout)
+# 5) UI (NEATER OVERVIEW)
 # -------------------------
 theme_gc <- bs_theme(
   version = 5,
-  bootswatch = "flatly",
+  bootswatch = "cosmo",
   base_font = font_google("Inter"),
   heading_font = font_google("Inter")
 )
 
 ui <- page_navbar(
-  title = "Heart Disease — Tree-Based Methods (Explainer)",
+  title = "Heart Disease — Tree-Based Methods",
   theme = theme_gc,
   
+  # ================
+  # OVERVIEW
+  # ================
   nav_panel(
     "Overview",
     layout_column_wrap(
       width = 1,
+      
       card(
-        card_header("Goal"),
-        p("This app explains how decision trees and random forests can predict heart disease risk."),
-        p("Use the decision tree to see transparent rules (like a flowchart), and the random forest to see how combining many trees improves performance.")
+        class = "shadow-sm",
+        style = "padding: 20px;",
+        h3("Heart Disease Risk Prediction Dashboard", style = "margin-top: 0; font-weight: 600;"),
+        p("This interactive dashboard demonstrates how tree-based machine learning models can be used to predict the presence of heart disease."),
+        p(
+          "The application compares a ",
+          tags$b("Decision Tree"), " (transparent, rule-based) with a ",
+          tags$b("Random Forest"), " (ensemble method improving stability)."
+        ),
+        tags$hr(style = "margin-top: 15px; margin-bottom: 15px;"),
+        p(
+          tags$b("Objective: "),
+          "Evaluate interpretability, predictive performance, and the trade-off between sensitivity and specificity using classification thresholds."
+        )
       ),
+      
       layout_column_wrap(
         width = 1/3,
-        value_box("Rows (cleaned)", nrow(heart)),
-        value_box("Features", ncol(heart) - 1),
-        value_box("Positive rate (target=1)", round(mean(as.numeric(as.character(heart$target))), 3))
+        value_box("Observations", nrow(heart)),
+        value_box("Predictor Variables", ncol(heart) - 1),
+        value_box("Prevalence (Disease = 1)", paste0(round(mean(as.numeric(as.character(heart$target))), 3)))
       ),
-      card(card_header("Feature dictionary"), DTOutput("dict_tbl"))
+      
+      layout_column_wrap(
+        width = 1/2,
+        card(
+          class = "shadow-sm",
+          card_header(tags$strong("Methodological Focus")),
+          tags$ul(
+            tags$li("Rule-based model interpretation (Decision Tree splits)."),
+            tags$li("Ensemble learning and variable importance (Random Forest)."),
+            tags$li("Threshold adjustment to examine classification trade-offs."),
+            tags$li("Evaluation via Accuracy, Sensitivity, Specificity and AUC.")
+          )
+        ),
+        card(
+          class = "shadow-sm",
+          card_header(tags$strong("How to Navigate the Dashboard")),
+          tags$ol(
+            tags$li("Explore the dataset and variable distributions."),
+            tags$li("Adjust tree parameters and observe structural changes."),
+            tags$li("Use 'Walk a patient' to interpret rule-based decisions."),
+            tags$li("Compare performance with Random Forest metrics.")
+          )
+        )
+      ),
+      
+      card(
+        class = "shadow-sm",
+        card_header(tags$strong("Variable Definitions")),
+        DTOutput("dict_tbl")
+      )
     )
-  ),
+  ), # ✅ IMPORTANT COMMA HERE (you were missing this)
   
+  # ================
+  # DATA
+  # ================
   nav_panel(
     "Explore the data",
     layout_column_wrap(
       width = 1,
       card(
-        card_header("Dataset preview"),
+        class = "shadow-sm",
+        card_header(tags$strong("Dataset preview")),
         div(style = "height: 420px; overflow-y: auto;", DTOutput("data_tbl"))
       ),
       layout_column_wrap(
         width = 1/2,
-        card(card_header("Target balance"), plotOutput("plot_target", height = 280)),
-        card(card_header("Correlation (numeric only)"), plotOutput("plot_corr", height = 280))
+        card(class = "shadow-sm", card_header(tags$strong("Target balance")), plotOutput("plot_target", height = 280)),
+        card(class = "shadow-sm", card_header(tags$strong("Correlation (numeric only)")), plotOutput("plot_corr", height = 280))
       )
     )
   ),
   
+  # ================
+  # TREE
+  # ================
   nav_panel(
-    "Decision tree (explainer)",
+    "Decision tree",
     layout_sidebar(
       sidebar = sidebar(
         h5("Tree controls"),
@@ -237,27 +290,30 @@ ui <- page_navbar(
         sliderInput("tree_maxdepth", "Max depth", min = 1, max = 10, value = 4, step = 1),
         sliderInput("tree_minsplit", "Min split", min = 2, max = 60, value = 20, step = 1),
         hr(),
-        h5("Explanation controls"),
-        sliderInput("threshold", "Classification threshold (probability for class=1)", min = 0.05, max = 0.95, value = 0.50, step = 0.05),
-        helpText("Lower threshold → more positives caught (higher sensitivity). Higher threshold → fewer false positives (higher specificity).")
+        h5("Decision rule threshold"),
+        sliderInput("threshold", "Probability cutoff for class=1", min = 0.05, max = 0.95, value = 0.50, step = 0.05),
+        helpText("Lower cutoff = more positives predicted (higher sensitivity).")
       ),
       layout_column_wrap(
         width = 1,
-        card(card_header("Decision tree"), plotOutput("plot_tree", height = 560))
+        card(class = "shadow-sm", card_header(tags$strong("Decision tree (flowchart of rules)")), plotOutput("plot_tree", height = 560))
       ),
       layout_column_wrap(
         width = 1/2,
-        card(card_header("Performance (Tree)"), verbatimTextOutput("tree_perf")),
-        card(card_header("ROC curve (Tree)"), plotOutput("plot_tree_roc", height = 320))
+        card(class = "shadow-sm", card_header(tags$strong("Tree performance")), verbatimTextOutput("tree_perf")),
+        card(class = "shadow-sm", card_header(tags$strong("ROC curve")), plotOutput("plot_tree_roc", height = 320))
       )
     )
   ),
   
+  # ================
+  # PATIENT WALK
+  # ================
   nav_panel(
-    "Walk a patient (step-by-step)",
+    "Walk a patient",
     layout_sidebar(
       sidebar = sidebar(
-        h5("Patient inputs (match dataset coding)"),
+        h5("Patient inputs"),
         numericInput("p_age", "Age", value = 55, min = 1, max = 120),
         selectInput("p_sex", "Sex (0=female, 1=male)", choices = levels(train$sex), selected = levels(train$sex)[1]),
         selectInput("p_cp", "Chest pain type (cp)", choices = levels(train$cp), selected = levels(train$cp)[1]),
@@ -273,16 +329,19 @@ ui <- page_navbar(
         selectInput("p_thal", "Thal (thal)", choices = levels(train$thal), selected = levels(train$thal)[1]),
         actionButton("btn_explain", "Explain my path", class = "btn-primary"),
         hr(),
-        helpText("This tab shows the exact rules applied by the decision tree (like a guided explanation).")
+        helpText("Click the button to generate the prediction and the exact decision rules used by the tree.")
       ),
       layout_column_wrap(
         width = 1,
-        card(card_header("Prediction summary"), verbatimTextOutput("patient_summary")),
-        card(card_header("Step-by-step decision path (rules)"), verbatimTextOutput("patient_path"))
+        card(class = "shadow-sm", card_header(tags$strong("Prediction summary")), uiOutput("patient_summary_ui")),
+        card(class = "shadow-sm", card_header(tags$strong("Step-by-step decision path")), uiOutput("patient_path_ui"))
       )
     )
   ),
   
+  # ================
+  # RF
+  # ================
   nav_panel(
     "Random forest",
     layout_sidebar(
@@ -298,12 +357,12 @@ ui <- page_navbar(
       ),
       layout_column_wrap(
         width = 1/2,
-        card(card_header("Variable importance (Top 10)"), plotOutput("plot_rf_imp", height = 380)),
-        card(card_header("Performance (RF)"), verbatimTextOutput("rf_perf"))
+        card(class = "shadow-sm", card_header(tags$strong("Variable importance (Top 10)")), plotOutput("plot_rf_imp", height = 380)),
+        card(class = "shadow-sm", card_header(tags$strong("Random forest performance")), verbatimTextOutput("rf_perf"))
       ),
       layout_column_wrap(
         width = 1,
-        card(card_header("ROC curve (RF)"), plotOutput("plot_rf_roc", height = 320))
+        card(class = "shadow-sm", card_header(tags$strong("ROC curve (Random Forest)")), plotOutput("plot_rf_roc", height = 320))
       )
     )
   )
@@ -314,22 +373,12 @@ ui <- page_navbar(
 # -------------------------
 server <- function(input, output, session) {
   
-  # ---- Feature dictionary
   output$dict_tbl <- DT::renderDT({
-    DT::datatable(
-      feature_dictionary(),
-      options = list(pageLength = 8, dom = "tip"),
-      rownames = FALSE
-    )
+    DT::datatable(feature_dictionary(), options = list(pageLength = 8, dom = "tip"), rownames = FALSE)
   }, server = FALSE)
   
-  # ---- Data preview
   output$data_tbl <- DT::renderDT({
-    DT::datatable(
-      heart,
-      options = list(pageLength = 10, scrollX = TRUE),
-      rownames = FALSE
-    )
+    DT::datatable(heart, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)
   }, server = FALSE)
   
   output$plot_target <- renderPlot({
@@ -355,7 +404,7 @@ server <- function(input, output, session) {
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
   })
   
-  # ---- Decision Tree Model
+  # ---- Decision tree
   tree_model <- reactive({
     rpart(
       target ~ .,
@@ -370,18 +419,13 @@ server <- function(input, output, session) {
   })
   
   output$plot_tree <- renderPlot({
-    rpart.plot(
-      tree_model(),
-      type = 2,
-      extra = 104,
-      fallen.leaves = TRUE,
-      main = "Decision Tree (flowchart of rules)"
-    )
+    rpart.plot(tree_model(), type = 2, extra = 104, fallen.leaves = TRUE, main = "")
   })
   
-  # ---- Tree performance (threshold adjustable)
   tree_perf_obj <- reactive({
-    prob1 <- predict(tree_model(), test, type = "prob")[, "1"]
+    prob_mat <- predict(tree_model(), test, type = "prob")
+    prob1 <- get_prob1_safe(prob_mat)
+    
     pred_class <- ifelse(prob1 >= input$threshold, "1", "0")
     pred_class <- factor(pred_class, levels = c("0","1"))
     compute_metrics(test$target, pred_class, prob1)
@@ -403,24 +447,7 @@ server <- function(input, output, session) {
     safe_plot_roc(m$roc, m$auc, "Decision Tree ROC")
   })
   
-  # =========================
-  # PATIENT WALKTHROUGH (FIXED: never blank)
-  # =========================
-  
-  # Default outputs (so the tab never loads blank)
-  output$patient_summary <- renderPrint({
-    cat("Enter patient details on the left, then click 'Explain my path'.\n\n")
-    cat("You will see:\n")
-    cat("- Probability of disease (class=1)\n")
-    cat("- Predicted class using the threshold slider\n")
-    cat("- The exact decision rules the tree applied\n")
-  })
-  
-  output$patient_path <- renderPrint({
-    cat("No path yet.\n")
-    cat("Click 'Explain my path' to see the step-by-step rules.\n")
-  })
-  
+  # ---- Patient walkthrough (robust)
   build_patient_row <- function() {
     one <- train[1, , drop = FALSE]
     
@@ -444,62 +471,60 @@ server <- function(input, output, session) {
   patient_result <- reactiveVal(NULL)
   
   observeEvent(input$btn_explain, {
-    one <- build_patient_row()
-    
-    prob1 <- predict(tree_model(), one, type = "prob")[, "1"]
-    pred_class <- ifelse(prob1 >= input$threshold, "1", "0")
-    rules <- get_tree_path_rules(tree_model(), one)
-    
-    patient_result(list(prob1 = prob1, pred_class = pred_class, rules = rules))
+    tryCatch({
+      one <- build_patient_row()
+      
+      prob_mat <- predict(tree_model(), one, type = "prob")
+      prob1 <- get_prob1_safe(prob_mat)
+      
+      pred_class <- ifelse(prob1 >= input$threshold, "1", "0")
+      rules <- get_tree_path_rules_safe(tree_model(), one)
+      
+      patient_result(list(prob1 = prob1, pred_class = pred_class, rules = rules))
+    }, error = function(e) {
+      showNotification(paste("Could not compute patient explanation:", e$message), type = "error", duration = 8)
+      patient_result(list(prob1 = NA, pred_class = "NA", rules = character(0)))
+    })
   })
   
-  output$patient_summary <- renderPrint({
+  output$patient_summary_ui <- renderUI({
     res <- patient_result()
     if (is.null(res)) {
-      cat("Enter patient details on the left, then click 'Explain my path'.\n")
-      return()
+      return(tags$p("Enter details and click ", tags$b("Explain my path"), " to generate the explanation."))
     }
     
-    cat("Decision Tree Prediction\n")
-    cat("------------------------\n")
-    cat("Probability of disease (class=1):", fmt(res$prob1), "\n")
-    cat("Threshold used:", input$threshold, "\n")
-    cat("Predicted class:", res$pred_class, "(1=higher risk, 0=lower risk)\n\n")
-    cat("How to interpret:\n")
-    cat("- The tree asks questions in order.\n")
-    cat("- Early questions (near the top) usually matter most.\n")
-  })
-  
-  output$patient_path <- renderPrint({
-    res <- patient_result()
-    if (is.null(res)) {
-      cat("No path yet. Click 'Explain my path'.\n")
-      return()
-    }
+    label <- if (is.na(res$prob1)) "Not available" else if (res$pred_class == "1") "Higher risk (class=1)" else "Lower risk (class=0)"
     
-    cat("Step-by-step rule path\n")
-    cat("----------------------\n")
-    if (length(res$rules) == 0) {
-      cat("No rules extracted.\n")
-      cat("Try lowering cp or increasing max depth so the tree has more splits.\n")
-    } else {
-      for (i in seq_along(res$rules)) cat(sprintf("%d) %s\n", i, res$rules[i]))
-    }
-  })
-  
-  # ---- Random Forest
-  rf_model <- reactive({
-    randomForest(
-      target ~ .,
-      data = train,
-      ntree = input$rf_ntree,
-      mtry  = input$rf_mtry,
-      importance = TRUE
+    tags$div(
+      tags$p(tags$b("Probability of disease (class=1): "), fmt(res$prob1)),
+      tags$p(tags$b("Threshold used: "), input$threshold),
+      tags$p(tags$b("Predicted class: "), label)
     )
   })
   
+  output$patient_path_ui <- renderUI({
+    res <- patient_result()
+    if (is.null(res)) return(tags$p("No path yet. Click 'Explain my path'."))
+    
+    if (length(res$rules) == 0) {
+      return(tags$div(
+        tags$p("No rules extracted."),
+        tags$p("Try lowering cp or increasing max depth so the tree has more splits.")
+      ))
+    }
+    
+    tags$ol(lapply(res$rules, tags$li))
+  })
+  
+  # ---- Random forest
+  rf_model <- reactive({
+    randomForest(target ~ ., data = train, ntree = input$rf_ntree, mtry = input$rf_mtry, importance = TRUE)
+  })
+  
   rf_perf_obj <- reactive({
-    prob1 <- predict(rf_model(), test, type = "prob")[, "1"]
+    prob_mat <- predict(rf_model(), test, type = "prob")
+    prob1 <- get_prob1_safe(prob_mat)
+    
     pred_class <- ifelse(prob1 >= input$threshold, "1", "0")
     pred_class <- factor(pred_class, levels = c("0","1"))
     compute_metrics(test$target, pred_class, prob1)
@@ -518,13 +543,10 @@ server <- function(input, output, session) {
     print(tail(rf_model()$err.rate, 1))
   })
   
-  # RF importance (fixed: no slice_head / n() issues)
   output$plot_rf_imp <- renderPlot({
     imp <- importance(rf_model())
     if (is.null(dim(imp))) {
-      plot.new()
-      text(0.5, 0.5, "Importance not available.")
-      return(invisible())
+      plot.new(); text(0.5, 0.5, "Importance not available."); return(invisible())
     }
     
     imp_df <- data.frame(
