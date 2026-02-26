@@ -457,6 +457,9 @@ ui <- page_navbar(
     )
   ),
   
+  # -------------------------
+  # ✅ UPDATED: Random forest layout (bottom row split: ROC left, CM right; smaller ROC height)
+  # -------------------------
   nav_panel(
     "Random forest",
     layout_sidebar(
@@ -475,8 +478,9 @@ ui <- page_navbar(
         card(class = "shadow-sm", card_header(tags$strong("Random forest performance")), uiOutput("rf_perf_ui"))
       ),
       layout_column_wrap(
-        width = 1,
-        card(class = "shadow-sm", card_header(tags$strong("ROC curve (Random Forest)")), plotOutput("plot_rf_roc", height = 320))
+        width = 1 / 2,
+        card(class = "shadow-sm", card_header(tags$strong("ROC curve (Random Forest)")), plotOutput("plot_rf_roc", height = 240)),
+        card(class = "shadow-sm", card_header(tags$strong("Confusion matrix")), plotOutput("plot_rf_cm_heat", height = 240))
       )
     )
   ),
@@ -500,8 +504,8 @@ ui <- page_navbar(
       layout_column_wrap(
         width = 1,
         card(class = "shadow-sm", card_header(tags$strong("Selected XGBoost Tree")),
-            grVizOutput("plot_xgb_tree"))
-            #plotOutput("plot_xgb_tree", height = 560))
+             grVizOutput("plot_xgb_tree"))
+        #plotOutput("plot_xgb_tree", height = 560))
       ),
       layout_column_wrap(
         width = 1 / 2,
@@ -838,11 +842,12 @@ server <- function(input, output, session) {
       theme_minimal(base_size = 13)
   })
   
+  # ✅ UPDATED: rf_perf_ui shows ONLY the table now (confusion matrix is in its own card)
   output$rf_perf_ui <- renderUI({
     m <- rf_perf_obj()
     oob <- tryCatch(tail(rf_model()$err.rate, 1), error = function(e) NULL)
     
-    metrics_tbl <- tags$table(
+    tags$table(
       class = "table table-sm table-striped align-middle",
       tags$tbody(
         tags$tr(tags$th("Threshold"), tags$td(fmt(input$threshold, digits = 2))),
@@ -853,11 +858,6 @@ server <- function(input, output, session) {
         tags$tr(tags$th("OOB error (training RF)"),
                 tags$td(if (is.null(oob)) "NA" else fmt(as.numeric(oob[1, "OOB"]), digits = 3)))
       )
-    )
-    
-    tags$div(
-      metrics_tbl,
-      tags$div(style = "margin-top: 8px;", plotOutput("plot_rf_cm_heat", height = 280))
     )
   })
   
@@ -878,26 +878,26 @@ server <- function(input, output, session) {
     trees = 3
   ){
     xgb.model <- boost_tree(
-        mode = 'classification',
-        engine = 'xgboost',
-        tree_depth = tree_depth,
-        learn_rate = learn_rate,
-        trees = trees,
-      )
-
+      mode = 'classification',
+      engine = 'xgboost',
+      tree_depth = tree_depth,
+      learn_rate = learn_rate,
+      trees = trees,
+    )
+    
     xgb.wf <- workflow() |> 
       add_recipe(heart.recipe) |> 
       add_model(xgb.model)
-
+    
     xgb.wf |> fit(train)
   }
-
+  
   xgb.fit <- reactiveVal(build_xgb_model())
-
+  
   xgb.fit.obj <- reactive({
     extract_fit_engine(xgb.fit())
   })
-
+  
   observeEvent(input$btn_train_xgb, {
     tryCatch({
       
@@ -908,7 +908,7 @@ server <- function(input, output, session) {
           trees = input$xgb_num_boost_round
         )
       )
-
+      
     }, error = function(e) {
       showNotification(paste("Could not train XGBoost model:", e$message),
                        type = "error", duration = 8)
@@ -917,10 +917,10 @@ server <- function(input, output, session) {
   })
   
   output$plot_xgb_tree <- renderGrViz({
-
+    
     xgb.plot.tree(xgb.fit.obj(),
-      tree_idx = input$xgb_tree_index,
-      with_stats=TRUE)
+                  tree_idx = input$xgb_tree_index,
+                  with_stats=TRUE)
   })
   
   xg_perf_obj <- reactive({
@@ -935,9 +935,9 @@ server <- function(input, output, session) {
   output$xgb_feature_imp <- renderPlot({
     
     Xtrain <- heart.recipe |> prep() |> bake(train) |> select(!target)
-
+    
     shp <- shapviz(xgb.fit.obj(), X_pred = data.matrix(Xtrain), X = Xtrain)
-
+    
     sv_importance(shp, kind='both', fill='lightgreen')
   })
   
