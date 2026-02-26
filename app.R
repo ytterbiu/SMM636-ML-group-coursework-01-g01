@@ -104,8 +104,8 @@ train <- heart[train_index, ]
 test  <- heart[-train_index, ]
 
 # DMatrix for xgboost
-Dtrain <- heart.recipe |> prep() |> bake(train) |> select(!target) |> xgb.DMatrix()
-Dtest <- heart.recipe |> prep() |> bake(test) |> select(!target) |> xgb.DMatrix()
+#Dtrain <- heart.recipe |> prep() |> bake(train) |> select(!target) |> xgb.DMatrix()
+#Dtest <- heart.recipe |> prep() |> bake(test) |> select(!target) |> xgb.DMatrix()
 
 # -------------------------
 # 3) METRICS + SAFE ROC
