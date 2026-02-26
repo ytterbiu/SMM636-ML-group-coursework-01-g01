@@ -482,13 +482,13 @@ ui <- page_navbar(
   ),
   
   nav_panel(
-    "XG Boosted",
+    "XGBoost",
     layout_sidebar(
       sidebar = sidebar(
         h5("XGBoost controls"),
         sliderInput("xgb_num_boost_round", "Number of Boosting rounds", min = 1, max = 10, value = 3, step = 1),
         sliderInput("xgb_max_depth", "Max Depth", min = 1, max = 10, value = 3, step = 1),
-        sliderInput("xgb_eta", "Learning ", min = 0, max = 1, value = 1, step = 0.05),
+        sliderInput("xgb_eta", "Learning Rate", min = 0, max = 1, value = 1, step = 0.05),
         actionButton("btn_train_xgb", "Train XGBoost", class = "btn-primary"),
         hr(),
         sliderInput("xgb_tree_index", "Tree index to display", min = 1, max = 10, value = 1, step = 1),
@@ -505,7 +505,7 @@ ui <- page_navbar(
       ),
       layout_column_wrap(
         width = 1 / 2,
-        card(class = "shadow-sm", card_header(tags$strong(" performance")), verbatimTextOutput("xg_tree_perf")),
+        card(class = "shadow-sm", card_header(tags$strong("Feature Importance")), plotOutput("xgb_feature_imp")),
         card(class = "shadow-sm", card_header(tags$strong("ROC curve")), plotOutput("plot_xg_tree_roc", height = 320))
       )
     )
@@ -871,7 +871,7 @@ server <- function(input, output, session) {
     safe_plot_roc(m$roc, m$auc, "Random Forest ROC")
   })
   
-  # ---- XG Boosted (rpart-based as per your original section)
+  # ---- XGBoost
   build_xgb_model <- function(
     tree_depth = 3,
     learn_rate = 1,
@@ -894,6 +894,10 @@ server <- function(input, output, session) {
 
   xgb.fit <- reactiveVal(build_xgb_model())
 
+  xgb.fit.obj <- reactive({
+    extract_fit_engine(xgb.fit())
+  })
+
   observeEvent(input$btn_train_xgb, {
     tryCatch({
       
@@ -913,10 +917,8 @@ server <- function(input, output, session) {
   })
   
   output$plot_xgb_tree <- renderGrViz({
-    
-    xgb.fit.obj <- extract_fit_engine(xgb.fit())
 
-    xgb.plot.tree(xgb.fit.obj,
+    xgb.plot.tree(xgb.fit.obj(),
       tree_idx = input$xgb_tree_index,
       with_stats=TRUE)
   })
@@ -928,6 +930,15 @@ server <- function(input, output, session) {
     # pred_class <- factor(pred_class, levels = c("0", "1"))
     # compute_metrics(test$target, pred_class, prob1)
     NULL
+  })
+  
+  output$xgb_feature_imp <- renderPlot({
+    
+    Xtrain <- heart.recipe |> prep() |> bake(train) |> select(!target)
+
+    shp <- shapviz(xgb.fit.obj(), X_pred = data.matrix(Xtrain), X = Xtrain)
+
+    sv_importance(shp, kind='both', fill='lightgreen')
   })
   
   output$xg_tree_perf <- renderPrint({
