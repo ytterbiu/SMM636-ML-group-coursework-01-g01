@@ -23,6 +23,11 @@ library(rpart.plot)
 library(randomForest)
 library(pROC)
 
+library(tidymodels)
+library(xgboost)
+
+library(DiagrammeR)
+
 # -------------------------
 # 1) DATA: FIND + LOAD + CLEAN
 # -------------------------
@@ -80,6 +85,10 @@ load_heart_data <- function(path) {
 
 heart <- load_heart_data(get_data_path())
 
+heart.recipe <- heart |>
+  recipe(target ~ .) |>
+  step_dummy(all_nominal_predictors())
+
 # -------------------------
 # 2) TRAIN / TEST (STRATIFIED)
 # -------------------------
@@ -93,6 +102,10 @@ train1 <- sample(idx1, size = floor(0.70 * length(idx1)))
 train_index <- c(train0, train1)
 train <- heart[train_index, ]
 test  <- heart[-train_index, ]
+
+# DMatrix for xgboost
+Dtrain <- heart.recipe |> prep() |> bake(train) |> select(!target) |> xgb.DMatrix()
+Dtest <- heart.recipe |> prep() |> bake(test) |> select(!target) |> xgb.DMatrix()
 
 # -------------------------
 # 3) METRICS + SAFE ROC
@@ -472,10 +485,13 @@ ui <- page_navbar(
     "XG Boosted",
     layout_sidebar(
       sidebar = sidebar(
-        h5("Tree controls"),
-        sliderInput("xg_tree_cp", "Complexity (cp)", min = 0.001, max = 0.08, value = 0.01, step = 0.001),
-        sliderInput("xg_tree_maxdepth", "Max depth", min = 1, max = 10, value = 4, step = 1),
-        sliderInput("xg_tree_minsplit", "Min split", min = 2, max = 60, value = 20, step = 1),
+        h5("XGBoost controls"),
+        sliderInput("xgb_num_boost_round", "Number of Boosting rounds", min = 1, max = 10, value = 3, step = 1),
+        sliderInput("xgb_max_depth", "Max Depth", min = 1, max = 10, value = 3, step = 1),
+        sliderInput("xgb_eta", "Learning ", min = 0, max = 1, value = 1, step = 0.05),
+        actionButton("btn_train_xgb", "Train XGBoost", class = "btn-primary"),
+        hr(),
+        sliderInput("xgb_tree_index", "Tree index to display", min = 1, max = 10, value = 1, step = 1),
         hr(),
         h5("Decision rule threshold"),
         sliderInput("xg_threshold", "Probability cutoff for class=1", min = 0.05, max = 0.95, value = 0.50, step = 0.05),
@@ -483,12 +499,13 @@ ui <- page_navbar(
       ),
       layout_column_wrap(
         width = 1,
-        card(class = "shadow-sm", card_header(tags$strong("Decision tree (flowchart of rules)")),
-             plotOutput("plot_xg_tree", height = 560))
+        card(class = "shadow-sm", card_header(tags$strong("Selected XGBoost Tree")),
+            grVizOutput("plot_xgb_tree"))
+            #plotOutput("plot_xgb_tree", height = 560))
       ),
       layout_column_wrap(
         width = 1 / 2,
-        card(class = "shadow-sm", card_header(tags$strong("Tree performance")), verbatimTextOutput("xg_tree_perf")),
+        card(class = "shadow-sm", card_header(tags$strong(" performance")), verbatimTextOutput("xg_tree_perf")),
         card(class = "shadow-sm", card_header(tags$strong("ROC curve")), plotOutput("plot_xg_tree_roc", height = 320))
       )
     )
@@ -855,45 +872,80 @@ server <- function(input, output, session) {
   })
   
   # ---- XG Boosted (rpart-based as per your original section)
-  xg_tree_model <- reactive({
-    rpart(
-      target ~ .,
-      data = train,
-      method = "class",
-      control = rpart.control(
-        cp = input$xg_tree_cp,
-        maxdepth = input$xg_tree_maxdepth,
-        minsplit = input$xg_tree_minsplit
+  build_xgb_model <- function(
+    tree_depth = 3,
+    learn_rate = 1,
+    trees = 3
+  ){
+    xgb.model <- boost_tree(
+        mode = 'classification',
+        engine = 'xgboost',
+        tree_depth = tree_depth,
+        learn_rate = learn_rate,
+        trees = trees,
       )
-    )
+
+    xgb.wf <- workflow() |> 
+      add_recipe(heart.recipe) |> 
+      add_model(xgb.model)
+
+    xgb.wf |> fit(train)
+  }
+
+  xgb.fit <- reactiveVal(build_xgb_model())
+
+  observeEvent(input$btn_train_xgb, {
+    tryCatch({
+      
+      xgb.fit(
+        build_xgb_model(
+          tree_depth = input$xgb_max_depth,
+          learn_rate = input$xgb_eta,
+          trees = input$xgb_num_boost_round
+        )
+      )
+
+    }, error = function(e) {
+      showNotification(paste("Could not train XGBoost model:", e$message),
+                       type = "error", duration = 8)
+      xgb.fit(NULL)
+    })
   })
   
-  output$plot_xg_tree <- renderPlot({
-    rpart.plot(xg_tree_model(), type = 2, extra = 104, fallen.leaves = TRUE, main = "")
+  output$plot_xgb_tree <- renderGrViz({
+    
+    xgb.fit.obj <- extract_fit_engine(xgb.fit())
+
+    xgb.plot.tree(xgb.fit.obj,
+      tree_idx = input$xgb_tree_index,
+      with_stats=TRUE)
   })
   
   xg_perf_obj <- reactive({
-    prob_mat <- predict(xg_tree_model(), test, type = "prob")
-    prob1 <- get_prob1_safe(prob_mat)
-    pred_class <- ifelse(prob1 >= input$xg_threshold, "1", "0")
-    pred_class <- factor(pred_class, levels = c("0", "1"))
-    compute_metrics(test$target, pred_class, prob1)
+    # prob_mat <- predict(xg_tree_model(), test, type = "prob")
+    # prob1 <- get_prob1_safe(prob_mat)
+    # pred_class <- ifelse(prob1 >= input$xg_threshold, "1", "0")
+    # pred_class <- factor(pred_class, levels = c("0", "1"))
+    # compute_metrics(test$target, pred_class, prob1)
+    NULL
   })
   
   output$xg_tree_perf <- renderPrint({
-    m <- xg_perf_obj()
-    cat("Threshold:", input$xg_threshold, "\n\n")
-    cat("Confusion Matrix:\n\n")
-    print(m$cm)
-    cat("\nAccuracy:", fmt(m$acc),
-        "\nSensitivity:", fmt(m$sens),
-        "\nSpecificity:", fmt(m$spec),
-        "\nAUC:", fmt(m$auc), "\n")
+    # m <- xg_perf_obj()
+    # cat("Threshold:", input$xg_threshold, "\n\n")
+    # cat("Confusion Matrix:\n\n")
+    # print(m$cm)
+    # cat("\nAccuracy:", fmt(m$acc),
+    #     "\nSensitivity:", fmt(m$sens),
+    #     "\nSpecificity:", fmt(m$spec),
+    #     "\nAUC:", fmt(m$auc), "\n")
+    print(xgb.fit())
   })
   
   output$plot_xg_tree_roc <- renderPlot({
-    m <- xg_perf_obj()
-    safe_plot_roc(m$roc, m$auc, "XG Boosted ROC")
+    # m <- xg_perf_obj()
+    # safe_plot_roc(m$roc, m$auc, "XG Boosted ROC")
+    return(invisible())
   })
 }
 
