@@ -27,6 +27,7 @@ library(tidymodels)
 library(xgboost)
 
 library(DiagrammeR)
+library(shapviz)
 
 # -------------------------
 # 1) DATA: FIND + LOAD + CLEAN
