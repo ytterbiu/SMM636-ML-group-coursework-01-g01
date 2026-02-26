@@ -180,11 +180,14 @@ ui <- page_navbar(
   header = tags$head(
     tags$style(HTML(
       "
-      body { padding-bottom: 70px; } /* Space for footer */
+      body { padding-bottom: 80px; } 
+      .tab-pane { padding-bottom: 90px !important; } /* fixes the scroll cut-off */
       .nav-footer { position: fixed; bottom: 0; left: 0; width: 100%; background: #f8f9fa; 
-                    padding: 10px 20px; border-top: 1px solid #ddd; z-index: 1000; 
+                    padding: 15px 20px; border-top: 1px solid #ddd; z-index: 1000; 
                     display: flex; justify-content: space-between; }
-      .info-btn{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:8px; border-radius:999px; background: var(--bs-primary); color: #fff; font-size:12px; cursor: pointer; }
+      .info-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; 
+                  height:18px; margin-left:8px; border-radius:999px; background: var(--bs-primary); 
+                  color: #fff; font-size:12px; cursor: pointer; }
     "
     )),
     tags$script(HTML(
@@ -265,7 +268,7 @@ ui <- page_navbar(
           tags$p(
             style = "font-size: 0.9em; color: #555; text-align: center;",
             tags$i(
-              "Note: This decision tree is built from an existing set of data."
+              "Note: This decision tree is built from an existing set of data. It is then tested and used on separate, new data."
             )
           ),
 
@@ -429,35 +432,85 @@ ui <- page_navbar(
   ),
 
   # ========================================================================== #
-  ## Tab 3: Step-bystep ----
+  ## Tab 3: Step-by-step ----
   nav_panel(
     title = "3. Building a Tree",
     value = "tab3",
+
+    # top instructions and dynamic value boxes
     layout_sidebar(
       sidebar = sidebar(
-        h5("Grow the Tree"),
+        h5("Growing a tree"),
         helpText(
-          "Let's look at just two variables: Age and Max Heart Rate (thalach). Move the slider to see how the algorithm divides the data step-by-step."
+          "Move the slider to see how the algorithm divides the data step-by-step, learning new rules with each layer.",
+          br(),
+          tags$em(
+            "Note: all scores are calculated here for the training dataset."
+          )
         ),
         sliderInput(
           "step_depth",
-          "Tree Depth Level:",
+          "Tree depth level:",
           min = 1,
           max = 5,
           value = 1,
           step = 1,
-          animate = TRUE
+          animate = animationOptions(interval = 5000)
         )
       ),
+
+      # top row: dynamic stats based on the slider
+      uiOutput("step_metrics_ui"),
+
       layout_column_wrap(
         width = 1 / 2,
+
+        # left side: the traditional tree diagram
         card(
-          card_header("The Decision Rules"),
+          class = "shadow-sm",
+          card_header(tags$strong("The decision rules")),
+
+          # instructions on how to read the tree
+          tags$div(
+            style = "background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 0.9em;",
+            tags$b("How to read the boxes:"),
+            tags$ul(
+              style = "margin-bottom: 0; padding-left: 20px;",
+              tags$li(
+                tags$b("Color: "),
+                "Blue = Predicted Healthy, Red = Predicted Disease."
+              ),
+              tags$li(
+                tags$b("Top text: "),
+                "The final prediction for patients in this group (0 or 1)."
+              ),
+              tags$li(
+                tags$b("Middle text: "),
+                "The probability of having heart disease in this group."
+              ),
+              tags$li(
+                tags$b("Bottom text: "),
+                "The percentage of all patients that fall into this group."
+              )
+            )
+          ),
+
           plotOutput("plot_step_tree", height = 400)
         ),
+
+        # right side: the 2d problem space with shaded regions
         card(
-          card_header("The 2D Problem Space (Age vs Heart Rate)"),
-          plotOutput("plot_step_2d", height = 400)
+          class = "shadow-sm",
+          card_header(tags$strong("The 2D problem space (Age vs Heart Rate)")),
+          plotOutput("plot_step_2d", height = 400),
+
+          # contextual note requested by user
+          tags$p(
+            style = "font-size: 0.9em; color: #555; text-align: center; margin-top: 10px;",
+            tags$i(
+              "Note: This is only a 2D slice of our data. While this simple example segments patients using just two variables, a full machine learning model filters based upon all the other clinical data not shown here, creating a complex, multi-dimensional set of rules."
+            )
+          )
         )
       )
     )
@@ -586,9 +639,11 @@ server <- function(input, output, session) {
   })
 
   # ========================================================================== #
-  ## Tab 3: step-by-step ----
+  ## Tab 3: Step-by-step server logic ----
+
+  # build a model using only age and thalach restricted by the depth slider
   step_model <- reactive({
-    # Model using ONLY age and thalach to keep the 2D visual clean
+    req(input$step_depth)
     rpart(
       target ~ age + thalach,
       data = train,
@@ -601,23 +656,133 @@ server <- function(input, output, session) {
     )
   })
 
-  output$plot_step_tree <- renderPlot({
-    rpart.plot(
-      step_model(),
-      type = 2,
-      extra = 104,
-      fallen.leaves = FALSE,
-      main = ""
+  # dynamic value boxes for the top of tab 3
+  output$step_metrics_ui <- renderUI({
+    req(step_model())
+
+    # get predictions for current tree depth
+    preds <- predict(step_model(), train, type = "class")
+    actual <- train$target
+
+    # calculate overall accuracy
+    acc <- sum(preds == actual) / nrow(train)
+
+    # calculate 'confidence' metrics
+    healthy_idx <- which(preds == "0")
+    conf_healthy <- if (length(healthy_idx) > 0) {
+      sum(actual[healthy_idx] == "0") / length(healthy_idx)
+    } else {
+      0
+    }
+
+    disease_idx <- which(preds == "1")
+    conf_disease <- if (length(disease_idx) > 0) {
+      sum(actual[disease_idx] == "1") / length(disease_idx)
+    } else {
+      0
+    }
+
+    # percentages of population
+    pct_healthy <- length(healthy_idx) / nrow(train)
+    pct_disease <- length(disease_idx) / nrow(train)
+
+    layout_column_wrap(
+      width = 1 / 3,
+      value_box(
+        "Current Accuracy",
+        paste0(round(acc * 100, 1), "%"),
+        theme = "success",
+        p("how often the current rules are correct")
+      ),
+      value_box(
+        "Predicted Healthy (NPV)",
+        paste0(round(pct_healthy * 100, 1), "%"),
+        # custom theme to match the background blue exactly
+        theme = value_box_theme(bg = "#4A90E2", fg = "white"),
+        p(paste0(
+          "(",
+          round(conf_healthy * 100, 1),
+          "% of these were actually healthy)"
+        ))
+      ),
+      value_box(
+        "Predicted Disease (PPV)",
+        paste0(round(pct_disease * 100, 1), "%"),
+        theme = "danger",
+        p(paste0(
+          "(",
+          round(conf_disease * 100, 1),
+          "% of these were actually sick)"
+        ))
+      )
     )
   })
 
-  output$plot_step_2d <- renderPlot({
-    ggplot(train, aes(x = age, y = thalach, color = target)) +
-      geom_point(alpha = 0.8, size = 3) +
-      scale_color_manual(values = c("0" = "#4A90E2", "1" = "#8A1C3D")) +
-      theme_minimal(base_size = 14) +
-      labs(title = "Patient Data", x = "Age", y = "Max Heart Rate")
+  # render the traditional tree diagram
+  output$plot_step_tree <- renderPlot({
+    m <- step_model()
+    # colors matching the prediction: 0 (Healthy) = Blue, 1 (Disease) = Red
+    box_colors <- ifelse(m$frame$yval == 1, "#4A90E2", "#c3436a")
+
+    rpart.plot(
+      m,
+      type = 2,
+      extra = 104,
+      fallen.leaves = FALSE,
+      main = "",
+      box.col = box_colors,
+      shadow.col = "gray90"
+    )
   })
+
+  # render the 2d scatter plot with dynamic decision boundaries
+  output$plot_step_2d <- renderPlot({
+    m <- step_model()
+
+    grid_data <- expand.grid(
+      age = seq(
+        min(train$age, na.rm = T),
+        max(train$age, na.rm = T),
+        length.out = 150
+      ),
+      thalach = seq(
+        min(train$thalach, na.rm = T),
+        max(train$thalach, na.rm = T),
+        length.out = 150
+      )
+    )
+
+    grid_data$pred_class <- predict(m, newdata = grid_data, type = "class")
+
+    ggplot() +
+      geom_raster(
+        data = grid_data,
+        aes(x = age, y = thalach, fill = pred_class),
+        alpha = 0.4
+      ) +
+      geom_point(
+        data = train,
+        aes(x = age, y = thalach, color = target),
+        size = 2.5,
+        shape = 16
+      ) +
+      scale_color_manual(
+        values = c("0" = "#4A90E2", "1" = "#8A1C3D"),
+        name = "Actual Status",
+        labels = c("Healthy", "Disease")
+      ) +
+      scale_fill_manual(
+        values = c("0" = "#4A90E2", "1" = "#8A1C3D"),
+        guide = "none"
+      ) +
+      theme_minimal(base_size = 14) +
+      labs(x = "Age (Years)", y = "Max Heart Rate (thalach)") +
+      theme(legend.position = "bottom")
+  })
+
+  # FIX: These lines ensure the plots load even before the tab is clicked
+  outputOptions(output, "plot_step_tree", suspendWhenHidden = FALSE)
+  outputOptions(output, "plot_step_2d", suspendWhenHidden = FALSE)
 
   # ========================================================================== #
   ## Tab 4: Full Decision Tree ----
