@@ -104,9 +104,11 @@ train_index <- c(train0, train1)
 train <- heart[train_index, ]
 test  <- heart[-train_index, ]
 
-# DMatrix for xgboost
-#Dtrain <- heart.recipe |> prep() |> bake(train) |> select(!target) |> xgb.DMatrix()
-#Dtest <- heart.recipe |> prep() |> bake(test) |> select(!target) |> xgb.DMatrix()
+# Transformed for xgboost
+Xtrain <- heart.recipe |> prep() |> bake(train) |> select(!target)
+Xtest <- heart.recipe |> prep() |> bake(test) |> select(!target)
+#Dtrain <- xgb.DMatrix(Xtrain)
+#Dtest <- xgb.DMatrix(Xtest)
 
 # -------------------------
 # 3) METRICS + SAFE ROC
@@ -506,7 +508,6 @@ ui <- page_navbar(
         width = 1,
         card(class = "shadow-sm", card_header(tags$strong("Selected XGBoost Tree")),
              grVizOutput("plot_xgb_tree"))
-        #plotOutput("plot_xgb_tree", height = 560))
       ),
       layout_column_wrap(
         width = 1 / 2,
@@ -924,40 +925,38 @@ server <- function(input, output, session) {
                   with_stats=TRUE)
   })
   
-  xg_perf_obj <- reactive({
-    # prob_mat <- predict(xg_tree_model(), test, type = "prob")
-    # prob1 <- get_prob1_safe(prob_mat)
-    # pred_class <- ifelse(prob1 >= input$xg_threshold, "1", "0")
-    # pred_class <- factor(pred_class, levels = c("0", "1"))
-    # compute_metrics(test$target, pred_class, prob1)
-    NULL
+  xgb_perf_obj <- reactive({
+
+    prob_mat <- xgb.fit() |> predict(new_data=test, type='prob')
+    prob1 <- unlist(get_prob1_safe(prob_mat))
+    pred_class <- ifelse(prob1 >= input$xg_threshold, "1", "0")
+    pred_class <- factor(pred_class, levels = c("0", "1"))
+    compute_metrics(test$target, pred_class, prob1)
+
   })
   
   output$xgb_feature_imp <- renderPlot({
-    
-    Xtrain <- heart.recipe |> prep() |> bake(train) |> select(!target)
     
     shp <- shapviz(xgb.fit.obj(), X_pred = data.matrix(Xtrain), X = Xtrain)
     
     sv_importance(shp, kind='both', fill='lightgreen')
   })
   
-  output$xg_tree_perf <- renderPrint({
-    # m <- xg_perf_obj()
-    # cat("Threshold:", input$xg_threshold, "\n\n")
-    # cat("Confusion Matrix:\n\n")
-    # print(m$cm)
-    # cat("\nAccuracy:", fmt(m$acc),
-    #     "\nSensitivity:", fmt(m$sens),
-    #     "\nSpecificity:", fmt(m$spec),
-    #     "\nAUC:", fmt(m$auc), "\n")
-    print(xgb.fit())
-  })
+  # output$xg_tree_perf <- renderPrint({
+  #   m <- xg_perf_obj()
+  #   cat("Threshold:", input$xg_threshold, "\n\n")
+  #   cat("Confusion Matrix:\n\n")
+  #   print(m$cm)
+  #   cat("\nAccuracy:", fmt(m$acc),
+  #       "\nSensitivity:", fmt(m$sens),
+  #       "\nSpecificity:", fmt(m$spec),
+  #       "\nAUC:", fmt(m$auc), "\n")
+  #   print(xgb.fit())
+  # })
   
   output$plot_xg_tree_roc <- renderPlot({
-    # m <- xg_perf_obj()
-    # safe_plot_roc(m$roc, m$auc, "XG Boosted ROC")
-    return(invisible())
+    m <- xgb_perf_obj()
+    safe_plot_roc(m$roc, m$auc, "XGBoost ROC")
   })
 }
 
