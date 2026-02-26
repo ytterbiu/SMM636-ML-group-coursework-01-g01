@@ -216,8 +216,9 @@ plot_cm_heatmap <- function(cm, title_text = "") {
   
   ggplot(df, aes(x = Actual, y = Predicted, fill = Count)) +
     geom_tile(color = "white", linewidth = 0.6) +
-    geom_text(aes(label = Count), size = 5) +
+    geom_text(aes(label = Count), colour = "white", size = 5) +
     labs(title = title_text, x = "Actual", y = "Predicted") +
+    scale_fill_gradient2(low = "red", mid = "blue", high = "green", midpoint = median(df$Count)) +
     theme_minimal(base_size = 13) +
     theme(
       plot.title = element_text(face = "bold"),
@@ -493,21 +494,23 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         h5("XGBoost controls"),
-        sliderInput("xgb_num_boost_round", "Number of Boosting rounds", min = 1, max = 10, value = 3, step = 1),
-        sliderInput("xgb_max_depth", "Max Depth", min = 1, max = 10, value = 3, step = 1),
+        sliderInput("xgb_num_boost_round", "Number of Boosting rounds", min = 1, max = 20, value = 10, step = 1),
+        sliderInput("xgb_max_depth", "Max Depth", min = 1, max = 4, value = 3, step = 1),
         sliderInput("xgb_eta", "Learning Rate", min = 0, max = 1, value = 1, step = 0.05),
         actionButton("btn_train_xgb", "Train XGBoost", class = "btn-primary"),
         hr(),
-        sliderInput("xgb_tree_index", "Tree index to display", min = 1, max = 10, value = 1, step = 1),
+        sliderInput("xgb_tree_index", "Tree index to display", min = 1, max = 20, value = 1, step = 1),
         hr(),
         h5("Decision rule threshold"),
         sliderInput("xg_threshold", "Probability cutoff for class=1", min = 0.05, max = 0.95, value = 0.50, step = 0.05),
         helpText("Lower cutoff = more positives predicted (higher sensitivity).")
       ),
       layout_column_wrap(
-        width = 1,
+        width = 1 / 2,
         card(class = "shadow-sm", card_header(tags$strong("Selected XGBoost Tree")),
-             grVizOutput("plot_xgb_tree"))
+            grVizOutput("plot_xgb_tree")),
+        card(class = "shadow-sm", card_header(tags$strong("XGBoost performance")), uiOutput("xgb_perf_ui"))
+        
       ),
       layout_column_wrap(
         width = 1 / 2,
@@ -880,26 +883,26 @@ server <- function(input, output, session) {
     trees = 3
   ){
     xgb.model <- boost_tree(
-      mode = 'classification',
-      engine = 'xgboost',
-      tree_depth = tree_depth,
-      learn_rate = learn_rate,
-      trees = trees,
-    )
-    
+        mode = 'classification',
+        engine = 'xgboost',
+        tree_depth = tree_depth,
+        learn_rate = learn_rate,
+        trees = trees,
+      )
+
     xgb.wf <- workflow() |> 
       add_recipe(heart.recipe) |> 
       add_model(xgb.model)
-    
+
     xgb.wf |> fit(train)
   }
-  
+
   xgb.fit <- reactiveVal(build_xgb_model())
-  
+
   xgb.fit.obj <- reactive({
     extract_fit_engine(xgb.fit())
   })
-  
+
   observeEvent(input$btn_train_xgb, {
     tryCatch({
       
@@ -910,7 +913,7 @@ server <- function(input, output, session) {
           trees = input$xgb_num_boost_round
         )
       )
-      
+
     }, error = function(e) {
       showNotification(paste("Could not train XGBoost model:", e$message),
                        type = "error", duration = 8)
@@ -919,10 +922,10 @@ server <- function(input, output, session) {
   })
   
   output$plot_xgb_tree <- renderGrViz({
-    
+
     xgb.plot.tree(xgb.fit.obj(),
-                  tree_idx = input$xgb_tree_index,
-                  with_stats=TRUE)
+      tree_idx = input$xgb_tree_index,
+      with_stats=FALSE)
   })
   
   xgb_perf_obj <- reactive({
@@ -932,31 +935,44 @@ server <- function(input, output, session) {
     pred_class <- ifelse(prob1 >= input$xg_threshold, "1", "0")
     pred_class <- factor(pred_class, levels = c("0", "1"))
     compute_metrics(test$target, pred_class, prob1)
-
+    
   })
   
   output$xgb_feature_imp <- renderPlot({
-    
+
     shp <- shapviz(xgb.fit.obj(), X_pred = data.matrix(Xtrain), X = Xtrain)
-    
     sv_importance(shp, kind='both', fill='lightgreen')
   })
-  
-  # output$xg_tree_perf <- renderPrint({
-  #   m <- xg_perf_obj()
-  #   cat("Threshold:", input$xg_threshold, "\n\n")
-  #   cat("Confusion Matrix:\n\n")
-  #   print(m$cm)
-  #   cat("\nAccuracy:", fmt(m$acc),
-  #       "\nSensitivity:", fmt(m$sens),
-  #       "\nSpecificity:", fmt(m$spec),
-  #       "\nAUC:", fmt(m$auc), "\n")
-  #   print(xgb.fit())
-  # })
+
+  output$xgb_perf_ui <- renderUI({
+    m <- xgb_perf_obj()
+    oob <- tryCatch(tail(rf_model()$err.rate, 1), error = function(e) NULL)
+    
+    metrics_tbl <- tags$table(
+      class = "table table-sm table-striped align-middle",
+      tags$tbody(
+        tags$tr(tags$th("Threshold"), tags$td(fmt(input$threshold, digits = 2))),
+        tags$tr(tags$th("Accuracy"), tags$td(fmt(m$acc))),
+        tags$tr(tags$th("Sensitivity"), tags$td(fmt(m$sens))),
+        tags$tr(tags$th("Specificity"), tags$td(fmt(m$spec))),
+        tags$tr(tags$th("AUC"), tags$td(fmt(m$auc))),
+      )
+    )
+
+    tags$div(
+      metrics_tbl,
+      tags$div(style = "margin-top: 8px;", plotOutput("plot_xgb_cm_heat", height = 200))
+    )
+  })
+
+  output$plot_xgb_cm_heat <- renderPlot({
+    m <- xgb_perf_obj()
+    plot_cm_heatmap(m$cm, "XGBoost — Confusion Matrix Heatmap")
+  })
   
   output$plot_xg_tree_roc <- renderPlot({
     m <- xgb_perf_obj()
-    safe_plot_roc(m$roc, m$auc, "XGBoost ROC")
+    safe_plot_roc(m$roc, m$auc, "XG Boosted ROC")
   })
 }
 
