@@ -860,7 +860,7 @@ ui <- page_navbar(
               "xgb_tree_index",
               "Tree index to display:",
               min = 1,
-              max = 20,
+              max = 10,
               value = 1,
               step = 1
             ),
@@ -1577,14 +1577,14 @@ server <- function(input, output, session) {
     extract_fit_engine(xgb.fit())
   })
 
-  # DYNAMICALLY UPDATE SLIDER MAX WHEN BOOSTING ROUNDS CHANGE
-  observeEvent(input$xgb_num_boost_round, {
-    updateSliderInput(
-      session,
-      "xgb_tree_index",
-      max = input$xgb_num_boost_round
-    )
-  })
+  # # DYNAMICALLY UPDATE SLIDER MAX WHEN BOOSTING ROUNDS CHANGE
+  # observeEvent(input$xgb_num_boost_round, {
+  #   updateSliderInput(
+  #     session,
+  #     "xgb_tree_index",
+  #     max = input$xgb_num_boost_round
+  #   )
+  # })
 
   observeEvent(input$btn_train_xgb, {
     tryCatch(
@@ -1601,6 +1601,13 @@ server <- function(input, output, session) {
           type = "error"
         )
       }
+    )
+
+    # DYNAMICALLY UPDATE SLIDER MAX WHEN BOOSTING ROUNDS CHANGE
+    updateSliderInput(
+      session,
+      "xgb_tree_index",
+      max = input$xgb_num_boost_round
     )
   })
 
