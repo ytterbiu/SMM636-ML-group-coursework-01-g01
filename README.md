@@ -1,19 +1,38 @@
 # Heart Disease Prediction Shiny App
 
-This project implements tree-based machine learning models to predict the presence of heart disease using the Cleveland dataset.
+This project implements tree-based machine learning models to predict the
+presence of heart disease using the Cleveland dataset. This was part of a group
+project at Bayes Business School (Term 2 2025-26) for module SMM636 Machine
+Learning.
+
+> [!NOTE] Live applications are available via:
+>
+> - [Basic application](https://3enji.shinyapps.io/smm636-a01-tree-based-methods/)
+> - [More specialised decision tree](https://3enji.shinyapps.io/smm636-a01-tree-based-methods-standalone-tab4/)
 
 ## Models Used
-- Decision Tree
-- Random Forest
 
-## Features
-- Interactive model selection
-- Adjustable model parameters
-- Visualisation of decision trees
-- Variable importance analysis
-- Performance evaluation using a confusion matrix
+1. Decision Trees — a single, readable set of rules.
+2. Random Forests — many trees trained on bootstrapped samples (“wisdom of
+   crowds”).
+3. XGBoost — boosted trees trained sequentially, with explanations supported
+   using **SHAP** values.
+
+## What the app includes
+
+- Presentation-style flow: starts with the problem and ends with the practical
+  takeaway, rather than just dumping outputs.
+- Interactive visuals: lets users play with the idea of splits and trees before
+  moving to the fitted models.
+- Tuning controls: sliders for tree complexity, number of trees (`ntree`), and
+  boosting rounds to name a few.
+- Model evaluation: ROC curves and confusion matrices for test performance, plus
+  SHAP summary / beeswarm plots for XGBoost interpretation.
+- UI built with `bslib`: simple, responsive layout suitable for a
+  “client-facing” demo.
 
 ## Dataset
+
 Cleveland Heart Disease Dataset (UCI / Kaggle)
 
 ## How to Run
@@ -25,21 +44,22 @@ Cleveland Heart Disease Dataset (UCI / Kaggle)
 
 ## Requirements
 
-Install required packages in R:
+Install dependencies with:
 
+```r
 install.packages(c(
   "shiny",
+  "bslib",
+  "dplyr",
+  "ggplot2",
+  "DT",
   "rpart",
   "rpart.plot",
   "randomForest",
-  "ggplot2",
-  "dplyr",
-  "corrplot"
+  "pROC",
+  "tidymodels",
+  "xgboost",
+  "DiagrammeR",
+  "shapviz"
 ))
-
-}
-
-
-
-#RUN SHINY APPLICATION
-shinyApp(ui = ui, server = server)
+```
