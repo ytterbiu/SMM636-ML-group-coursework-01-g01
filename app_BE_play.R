@@ -691,21 +691,32 @@ ui <- page_navbar(
               )
             ),
             p(
-              "When a new patient arrives, all 500 trees 'vote' on the diagnosis. The majority wins. This approach improves accuracy and stability."
+              "When a new patient arrives, all 500 trees 'vote' on the diagnosis. The majority wins. This approach typically improves accuracy and stability."
+            ),
+            tags$div(
+              style = "text-align: left; padding-top: 2px;",
+              tags$p(
+                "In our case study, random forests can help to identify which clinical variables reliably drive predictions across many different trees, highlighting factors that are consistently informative."
+              )
             )
           ),
           card(
             h5("Random Forest visualised"),
+
             tags$div(
-              style = "text-align: center; padding: 20px;",
-              tags$p(tags$i(
-                "Note: Save a graphic as 'rf_intro_graphic.png' inside the 'www' folder."
-              )),
+              style = "text-align: center;",
               tags$img(
                 src = "rf_intro_graphic.png",
-                style = "max-width: 100%; max-height: 350px; border: 1px dashed #ccc;"
+                style = "display:block; margin:0 auto; max-width:100%; max-height:350px; height:auto;"
               )
-            )
+            ),
+
+            tags$p(
+              style = "text-align: center; padding: 12px 0 0 0; margin: 0;",
+              tags$em(
+                "Image from https://www.grammarly.com/blog/ai/what-is-random-forest/ (accessed 27/02/2025)."
+              )
+            ),
           )
         )
       ),
@@ -796,15 +807,12 @@ ui <- page_navbar(
             )
           ),
           card(
-            h5("Boosting visualised"),
+            h5("XGBoost algorithm visualised"),
             tags$div(
               style = "text-align: center; padding: 20px;",
-              tags$p(tags$i(
-                "Note: Save a graphic as 'xgb_intro_graphic.png' inside the 'www' folder."
-              )),
               tags$img(
                 src = "xgb_intro_graphic.png",
-                style = "max-width: 100%; max-height: 350px; border: 1px dashed #ccc;"
+                style = "max-width: 100%; max-height: 550px; "
               )
             )
           )
@@ -848,15 +856,16 @@ ui <- page_navbar(
               class = "btn-primary"
             ),
             hr(),
-            sliderInput(
-              "xgb_tree_index",
-              "Tree index to display:",
-              min = 1,
-              max = 20,
-              value = 1,
-              step = 1
-            ),
-            hr(),
+            ### BE commented out*** ----
+            # sliderInput(
+            #   "xgb_tree_index",
+            #   "Tree index to display:",
+            #   min = 1,
+            #   max = 20,
+            #   value = 1,
+            #   step = 1
+            # ),
+            # hr(),
             h5("Decision rule threshold"),
             sliderInput(
               "xg_threshold",
@@ -902,29 +911,130 @@ ui <- page_navbar(
   ),
 
   # ========================================================================== #
-  ## Tab 6: Takeaway / conclusions ----
+  ## Tab 6: Takeaways ----
   nav_panel(
     title = "6. Takeaways",
     value = "tab6",
-    card(
-      h3("Advantages & Limitations"),
-      tags$ul(
-        tags$li(
-          tags$b("Decision Trees: "),
-          "Excellent for communicating to stakeholders. Highly transparent. Prone to overfitting and slightly lower accuracy."
+    layout_column_wrap(
+      width = 1 / 2, # Splits the screen exactly 50/50
+
+      # LEFT SIDE: Text summarizing the models
+      card(
+        h3("Which model is the right choice?"),
+        p(
+          "In data analytics, there is rarely a single 'perfect' algorithm. As we have demonstrated with this clinical dataset, choosing a model requires balancing ",
+          tags$b("accuracy"),
+          " with ",
+          tags$b("interpretability."),
         ),
-        tags$li(
-          tags$b("Random Forests: "),
-          "Greatly improved accuracy and stability by averaging many trees. Harder to draw a single 'path' for a patient."
+
+        tags$hr(),
+
+        h5("1. Decision Trees"),
+        p(tags$b("The clear communicator.")),
+        tags$ul(
+          tags$li(
+            "Highly transparent and easy to explain to stakeholders or regulators."
+          ),
+          tags$li("Mimics human decision-making processes."),
+          tags$li(
+            tags$span(
+              style = "color: #e74c3c; font-weight: bold;",
+              "Limitation: "
+            ),
+            "Prone to overfitting and generally has the lowest predictive accuracy of the three."
+          )
         ),
-        tags$li(
-          tags$b("XGBoost: "),
-          "Often best-in-class performance. Requires careful tuning to avoid overfitting."
+
+        # tags$hr(),
+
+        h5("2. Random Forests"),
+        p(tags$b("The stable workhorse.")),
+        tags$ul(
+          tags$li("Excellent out-of-the-box predictive accuracy."),
+          tags$li(
+            "Highly resistant to overfitting due to 'the wisdom of crowds' (averaging hundreds of independent trees)."
+          ),
+          tags$li(
+            tags$span(
+              style = "color: #e74c3c; font-weight: bold;",
+              "Limitation: "
+            ),
+            "It is a 'black box'. We can see which variables are important overall, but we cannot easily draw a single flowchart for a specific patient."
+          )
+        ),
+        #
+        # tags$hr(),
+
+        h5("3. XGBoost"),
+        p(tags$b("The precision instrument.")),
+        tags$ul(
+          tags$li(
+            "Often provides state-of-the-art, best-in-class predictive accuracy."
+          ),
+          tags$li(
+            "Learns sequentially from its own mistakes to optimize performance."
+          ),
+          tags$li(
+            tags$span(
+              style = "color: #e74c3c; font-weight: bold;",
+              "Limitation: "
+            ),
+            "Requires careful mathematical tuning to prevent it from memorizing the noise in the data. Also a 'black box'."
+          )
+        )
+      ),
+
+      # RIGHT SIDE: The Final Pitch
+      card(
+        h5("Our Approach"),
+        tags$div(
+          style = "text-align: left; padding: 5px;",
+
+          tags$p(
+            "As actuaries and data professionals, we do not just apply complex algorithms blindly. We partner with you to understand your specific business needs:"
+          ),
+
+          tags$ul(
+            tags$li(
+              "If your priority is ",
+              tags$b("regulatory compliance and transparency"),
+              " (e.g., explaining exactly why a policy was priced a certain way), we will leverage optimized ",
+              tags$b("Decision Trees"),
+              "."
+            ),
+            tags$li(
+              "If your priority is ",
+              tags$b("pure predictive power"),
+              " (e.g., catching as many fraudulent claims as possible), we will deploy highly tuned ",
+              tags$b("Ensembles like XGBoost"),
+              "."
+            )
+          ),
+
+          tags$br(),
+
+          tags$div(
+            style = "background-color: #f8f9fa; padding: 15px; border-left: 4px solid #8A1C3D; border-radius: 4px;",
+            tags$p(
+              style = "font-weight: bold; font-size: 1.1em; color: #333; margin-bottom: 0;",
+              "We balance cutting-edge accuracy with transparent, interpretable models."
+            )
+          ),
+
+          tags$br(),
+          tags$br(),
+
+          tags$p(
+            style = "font-size: 1.0em; color: #555; text-align: center;",
+            tags$i("Thank you for exploring this interactive case study.")
+          )
         )
       )
     )
   ),
 
+  ## Footer navigation ----
   # --- FOOTER NAVIGATION ---
   footer = tags$div(
     class = "nav-footer",
@@ -1497,16 +1607,18 @@ server <- function(input, output, session) {
 
   output$plot_xgb_tree <- renderGrViz({
     req(xgb.fit.obj())
-    req(input$xgb_tree_index)
+    ### BE commented out ----
+    # req(input$xgb_tree_index)
 
     # 0-indexed trees in XGBoost, capped at max rounds
-    idx <- as.integer(min(input$xgb_tree_index, input$xgb_num_boost_round)) - 1L
+    # idx <- as.integer(min(input$xgb_tree_index, input$xgb_num_boost_round)) - 1L
 
     suppressWarnings({
       # hoping render = FALSE will force compatability with Shiny
       xgboost::xgb.plot.tree(
         model = xgb.fit.obj(),
-        trees = idx,
+        # trees = idx, # replaced with below for now
+        trees = 0L,
         render = FALSE
       )
     })
