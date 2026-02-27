@@ -526,20 +526,14 @@ ui <- page_navbar(
       sidebar = sidebar(
         h5("1. Patient Profile"),
         helpText(
-          "Adjust these top 5 clinical metrics to see how the patient's path changes (the other 8 metrics are held at baseline averages for simplicity)."
+          tags$b("Feature Selection in action: "),
+          "Even though we provided 13 variables, the optimal tree only needs these 5 key metrics to make its predictions. Adjust them to see the path change!"
         ),
 
-        # simplified patient inputs
-        numericInput("p_age", "Age", value = 55, min = 20, max = 100),
-        selectInput(
-          "p_sex",
-          "Sex",
-          choices = c("Female" = "0", "Male" = "1"),
-          selected = "1"
-        ),
+        # updated inputs to match the tree's actual splits
         selectInput(
           "p_cp",
-          "Chest Pain Type",
+          "Chest Pain Type (cp)",
           choices = c(
             "Typical Angina" = "0",
             "Atypical" = "1",
@@ -548,19 +542,35 @@ ui <- page_navbar(
           ),
           selected = "3"
         ),
-        numericInput(
-          "p_thalach",
-          "Max Heart Rate",
-          value = 140,
-          min = 60,
-          max = 220
+        selectInput(
+          "p_ca",
+          "Major Vessels Colored (ca)",
+          choices = c("0" = "0", "1" = "1", "2" = "2", "3" = "3"),
+          selected = "0"
+        ),
+        selectInput(
+          "p_thal",
+          "Thalassemia (thal)",
+          choices = c(
+            "Normal" = "1",
+            "Fixed Defect" = "2",
+            "Reversible Defect" = "3"
+          ),
+          selected = "1"
         ),
         numericInput(
-          "p_chol",
-          "Cholesterol",
-          value = 240,
-          min = 100,
-          max = 400
+          "p_oldpeak",
+          "ST Depression (oldpeak)",
+          value = 1.0,
+          min = 0,
+          max = 6.2,
+          step = 0.1
+        ),
+        selectInput(
+          "p_slope",
+          "ST Slope (slope)",
+          choices = c("Upsloping" = "0", "Flat" = "1", "Downsloping" = "2"),
+          selected = "1"
         ),
 
         actionButton("btn_predict", "Predict My Path", class = "btn-primary"),
@@ -569,7 +579,7 @@ ui <- page_navbar(
 
         h5("2. Model Complexity"),
         helpText(
-          "Trees can grow too complex and 'overfit' the training data. Pruning helps it generalize to new patients."
+          "Trees can grow too complex and 'overfit' the training data. Pruning helps it generalise to new patients."
         ),
         checkboxInput(
           "auto_cp",
@@ -582,13 +592,16 @@ ui <- page_navbar(
           condition = "!input.auto_cp",
           sliderInput(
             "tree_cp",
-            "Complexity parameter (cp):",
+            "Pruning strength (lower = more complex tree):",
             min = 0.001,
             max = 0.04,
             value = 0.01,
             step = 0.005
+          ),
+          helpText(
+            "This control is the model’s complexity parameter: higher values prune more resulting in a simpler tree."
           )
-        )
+        ),
       ),
 
       # top row: testing data performance metrics
@@ -604,7 +617,7 @@ ui <- page_navbar(
           tags$p(
             style = "font-size: 0.9em; color: #555; text-align: center; margin-top: 10px;",
             tags$i(
-              "Note: This tree was built using the Training Data, but the accuracy scores above are calculated using the unseen Testing Data to prove it works in the real world."
+              "Note: This tree was built using the Training Data, but the accuracy scores above are calculated using the unseen Testing Data to see how well the tree works on new data."
             )
           )
         )
@@ -849,6 +862,7 @@ server <- function(input, output, session) {
   outputOptions(output, "plot_step_2d", suspendWhenHidden = FALSE)
 
   # ========================================================================== #
+  # ========================================================================== #
   ## Tab 4: Full decision tree server logic ----
 
   # determine the complexity parameter based on the checkbox
@@ -896,10 +910,10 @@ server <- function(input, output, session) {
         p("performance on unseen testing data")
       ),
       value_box(
-        "Sensitivity (Caught Disease)",
+        "Sensitivity (Caught Heart Disease)",
         paste0(round(sens * 100, 1), "%"),
         theme = "danger",
-        p("correctly identified disease cases")
+        p("correctly identified heart disease cases")
       ),
       value_box(
         "Specificity (Cleared Healthy)",
@@ -917,22 +931,22 @@ server <- function(input, output, session) {
     # 1. take the first row of training data to get the exact data structure & factor levels
     one <- train[1, , drop = FALSE]
 
-    # 2. override the 5 variables we expose in the UI
-    one$age <- input$p_age
-    one$sex <- factor(input$p_sex, levels = levels(train$sex))
+    # 2. override the 5 variables exposed in the UI (the ones the tree actually uses)
     one$cp <- factor(input$p_cp, levels = levels(train$cp))
-    one$thalach <- input$p_thalach
-    one$chol <- input$p_chol
+    one$ca <- factor(input$p_ca, levels = levels(train$ca))
+    one$thal <- factor(input$p_thal, levels = levels(train$thal))
+    one$slope <- factor(input$p_slope, levels = levels(train$slope))
+    one$oldpeak <- input$p_oldpeak
 
-    # 3. safely hold the rest at median/mode so the model doesn't crash
+    # 3. safely hold all the ignored variables at median/mode so the model doesn't crash
+    one$age <- median(train$age, na.rm = TRUE)
+    one$sex <- factor("1", levels = levels(train$sex))
     one$trestbps <- median(train$trestbps, na.rm = TRUE)
+    one$chol <- median(train$chol, na.rm = TRUE)
+    one$thalach <- median(train$thalach, na.rm = TRUE)
     one$fbs <- factor("0", levels = levels(train$fbs))
     one$restecg <- factor("0", levels = levels(train$restecg))
     one$exang <- factor("0", levels = levels(train$exang))
-    one$oldpeak <- median(train$oldpeak, na.rm = TRUE)
-    one$slope <- factor("1", levels = levels(train$slope))
-    one$ca <- factor("0", levels = levels(train$ca))
-    one$thal <- factor("1", levels = levels(train$thal))
 
     # 4. BUG FIX: duplicate the row to bypass the rpart 1-row dimension bug
     two_rows <- rbind(one, one)
@@ -966,7 +980,7 @@ server <- function(input, output, session) {
     node_ids <- as.integer(rownames(m$frame))
 
     # default colors (blue vs red)
-    box_colors <- ifelse(m$frame$yval == 1, "#8A1C3D", "#4A90E2")
+    box_colors <- ifelse(m$frame$yval == 1, "#c3436a", "#4A90E2")
     names(box_colors) <- as.character(node_ids)
 
     # if a patient was predicted, calculate the path and highlight it in gold
