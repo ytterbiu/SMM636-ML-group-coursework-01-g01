@@ -1,68 +1,60 @@
 # app.R
-# ==========================================
-# GCW1 — FINAL
-# Tree-Based Methods for Heart Disease (Explainer-style)
-# Patient-specific decision tree diagram with highlighted path (ALWAYS)
+# ============================================================================ #
+# GCW1 — FINAL (Guided Presentation Version) ====
+# ============================================================================ #
+# ============================================================================ #
+# Key Information ====
+# SMM636 Machine Learning
+# Group Coursework 2025-26
+# Group:        Group 01
+# Authors (in alphabetical order):
+#   - Abdulrahman Alolyan
+#   - Benjamin Evans
+#   - Basmah Khan
+#   - Ardi Wira Sudarmo
+# Professor:    Dr Rui Zhu
+# Institution:  Bayes Business School - City St George's, University of London
+# Date:         27 Feb 2026
 #
-# HOW TO RUN:
-# 1) Put processed.cleveland.data.csv in the SAME folder as this app.R
-# 2) Run: shiny::runApp()
-# ==========================================
+# Description:  Term 2 group project 01 for SMM636 Machine Learning
+#               (25% of coursework grade - 25% of module grade).
+# ============================================================================ #
 
-# -------------------------
-# 0) LIBRARIES
-# -------------------------
+# Libraries ====
 library(shiny)
 library(bslib)
 library(dplyr)
 library(ggplot2)
 library(DT)
-
 library(rpart)
 library(rpart.plot)
 library(randomForest)
 library(pROC)
-
 library(tidymodels)
 library(xgboost)
-
 library(DiagrammeR)
+library(shapviz)
 
-# -------------------------
-# 1) DATA: FIND + LOAD + CLEAN
-# -------------------------
+# ============================================================================ #
+# Data: find, load, clean ====
 get_data_path <- function() {
-  candidates <- c(
-    "processed.cleveland.data.csv",
-    "processed.cleveland.data.csv.csv",
-    "processed.cleveland.data"
-  )
-
+  candidates <- c("processed.cleveland.data.csv", "processed.cleveland.data")
   app_dir <- tryCatch(
     normalizePath(dirname(sys.frame(1)$ofile)),
     error = function(e) NULL
   )
   search_dirs <- unique(na.omit(c(app_dir, getwd())))
-
   for (d in search_dirs) {
     for (f in candidates) {
       p <- file.path(d, f)
       if (file.exists(p)) return(p)
     }
   }
-
-  stop(
-    "Dataset file not found.\n",
-    "Place 'processed.cleveland.data.csv' in the same folder as app.R.\n",
-    "Checked folders:\n- ",
-    paste(search_dirs, collapse = "\n- "),
-    call. = FALSE
-  )
+  stop("Dataset file not found.")
 }
 
 load_heart_data <- function(path) {
   heart <- read.csv(path, header = FALSE, na.strings = "?")
-
   colnames(heart) <- c(
     "age",
     "sex",
@@ -79,14 +71,12 @@ load_heart_data <- function(path) {
     "thal",
     "target"
   )
-
   heart$target <- ifelse(heart$target > 0, 1, 0)
 
   numeric_vars <- c("age", "trestbps", "chol", "thalach", "oldpeak")
   for (col in numeric_vars) {
     heart[[col]] <- suppressWarnings(as.numeric(as.character(heart[[col]])))
   }
-
   factor_vars <- c(
     "sex",
     "cp",
@@ -106,46 +96,45 @@ load_heart_data <- function(path) {
 }
 
 heart <- load_heart_data(get_data_path())
-
 heart.recipe <- heart |>
   recipe(target ~ .) |>
   step_dummy(all_nominal_predictors())
 
-# -------------------------
-# 2) TRAIN / TEST (STRATIFIED)
-# -------------------------
+# ============================================================================ #
+# Train/Test ====
 set.seed(123)
 idx0 <- which(heart$target == "0")
 idx1 <- which(heart$target == "1")
-
 train0 <- sample(idx0, size = floor(0.70 * length(idx0)))
 train1 <- sample(idx1, size = floor(0.70 * length(idx1)))
-
 train_index <- c(train0, train1)
 train <- heart[train_index, ]
 test <- heart[-train_index, ]
 
-# DMatrix for xgboost
-#Dtrain <- heart.recipe |> prep() |> bake(train) |> select(!target) |> xgb.DMatrix()
-#Dtest <- heart.recipe |> prep() |> bake(test) |> select(!target) |> xgb.DMatrix()
-
-# -------------------------
-# 3) METRICS + SAFE ROC
-# -------------------------
+# ============================================================================ #
+## Helper functions ----
 fmt <- function(x, digits = 3) {
   ifelse(is.na(x), "NA", formatC(x, digits = digits, format = "f"))
+}
+
+get_prob1_safe <- function(prob_matrix) {
+  cn <- colnames(prob_matrix)
+  if (!is.null(cn) && "1" %in% cn) {
+    return(prob_matrix[, "1"])
+  }
+  if (ncol(prob_matrix) >= 2) {
+    return(prob_matrix[, ncol(prob_matrix)])
+  }
+  as.numeric(prob_matrix[, 1])
 }
 
 compute_metrics <- function(actual, pred_class, pred_prob) {
   actual <- factor(actual, levels = c("0", "1"))
   pred_class <- factor(pred_class, levels = c("0", "1"))
-
   cm <- table(Predicted = pred_class, Actual = actual)
   acc <- sum(diag(cm)) / sum(cm)
-
   sens <- if (sum(cm[, "1"]) > 0) cm["1", "1"] / sum(cm[, "1"]) else NA
   spec <- if (sum(cm[, "0"]) > 0) cm["0", "0"] / sum(cm[, "0"]) else NA
-
   roc_obj <- NULL
   auc_val <- NA
   if (length(unique(actual)) == 2 && length(unique(pred_prob)) > 1) {
@@ -161,7 +150,6 @@ compute_metrics <- function(actual, pred_class, pred_prob) {
     )
     if (!is.null(roc_obj)) auc_val <- as.numeric(pROC::auc(roc_obj))
   }
-
   list(
     cm = cm,
     acc = acc,
@@ -172,74 +160,20 @@ compute_metrics <- function(actual, pred_class, pred_prob) {
   )
 }
 
-safe_plot_roc <- function(roc_obj, auc_val, title_text) {
-  if (is.null(roc_obj) || is.na(auc_val)) {
-    plot.new()
-    text(
-      0.5,
-      0.5,
-      "ROC not available.\n(Needs both classes + non-constant probabilities.)",
-      cex = 1
-    )
-    title(title_text)
-    return(invisible())
-  }
-  plot(
-    roc_obj,
-    legacy.axes = TRUE,
-    main = paste0(title_text, " (AUC=", fmt(auc_val), ")")
-  )
-  abline(a = 0, b = 1, lty = 2)
-}
-
-# -------------------------
-# 4) EXPLAINER HELPERS
-# -------------------------
-feature_dictionary <- function() {
-  data.frame(
-    feature = c(
-      "age",
-      "sex",
-      "cp",
-      "trestbps",
-      "chol",
-      "fbs",
-      "restecg",
-      "thalach",
-      "exang",
-      "oldpeak",
-      "slope",
-      "ca",
-      "thal"
-    ),
-    meaning = c(
-      "Age (years)",
-      "Sex (0=female, 1=male)",
-      "Chest pain type (categorical code)",
-      "Resting blood pressure (mm Hg)",
-      "Serum cholesterol (mg/dl)",
-      "Fasting blood sugar >120 mg/dl (1=true, 0=false)",
-      "Resting ECG result (categorical code)",
-      "Maximum heart rate achieved",
-      "Exercise induced angina (1=yes, 0=no)",
-      "ST depression induced by exercise relative to rest",
-      "Slope of peak exercise ST segment (categorical)",
-      "Major vessels (0–3) colored by fluoroscopy",
-      "Thalassemia test result (categorical code)"
-    ),
-    stringsAsFactors = FALSE
-  )
-}
-
-get_prob1_safe <- function(prob_matrix) {
-  cn <- colnames(prob_matrix)
-  if (!is.null(cn) && "1" %in% cn) {
-    return(prob_matrix[, "1"])
-  }
-  if (ncol(prob_matrix) >= 2) {
-    return(prob_matrix[, ncol(prob_matrix)])
-  }
-  as.numeric(prob_matrix[, 1])
+plot_cm_heatmap <- function(cm, title_text = "") {
+  df <- as.data.frame(cm)
+  colnames(df) <- c("Predicted", "Actual", "Count")
+  ggplot(df, aes(x = Actual, y = Predicted, fill = Count)) +
+    geom_tile(color = "white", linewidth = 0.6) +
+    geom_text(aes(label = Count), size = 5) +
+    scale_fill_gradient(low = "white", high = "#8A1C3D") +
+    labs(
+      title = title_text,
+      x = "Actual (0=Healthy, 1=Disease)",
+      y = "Predicted"
+    ) +
+    theme_minimal(base_size = 13) +
+    theme(legend.position = "none")
 }
 
 info_icon <- function(text) {
@@ -251,675 +185,1502 @@ info_icon <- function(text) {
     "i"
   )
 }
-
-plot_cm_heatmap <- function(cm, title_text = "") {
-  df <- as.data.frame(cm)
-  colnames(df) <- c("Predicted", "Actual", "Count")
-
-  ggplot(df, aes(x = Actual, y = Predicted, fill = Count)) +
-    geom_tile(color = "white", linewidth = 0.6) +
-    geom_text(aes(label = Count), size = 5) +
-    labs(title = title_text, x = "Actual", y = "Predicted") +
-    theme_minimal(base_size = 13) +
-    theme(
-      plot.title = element_text(face = "bold"),
-      panel.grid = element_blank()
-    )
-}
-
-# ---- Tree utilities
-tree_has_splits <- function(model) {
-  if (is.null(model) || is.null(model$frame)) {
-    return(FALSE)
-  }
-  any(model$frame$var != "<leaf>")
-}
-
-get_leaf_node_id <- function(model, one_row) {
-  as.integer(predict(model, one_row, type = "where"))
-}
-
-node_ancestors <- function(node_id) {
-  out <- integer(0)
-  while (!is.na(node_id) && node_id >= 1) {
-    out <- c(out, node_id)
-    if (node_id == 1) {
-      break
-    }
-    node_id <- floor(node_id / 2)
-  }
-  unique(out)
-}
-
-plot_patient_tree_highlight <- function(
-  model,
-  one_row,
-  main_title = "Patient-specific Decision Tree"
-) {
-  if (is.null(model) || is.null(model$frame)) {
+safe_plot_roc <- function(roc_obj, auc_val, title_text) {
+  if (is.null(roc_obj) || is.na(auc_val)) {
     plot.new()
-    text(0.5, 0.5, "Model not available.")
+    text(0.5, 0.5, "ROC not available.", cex = 1)
     return(invisible())
   }
 
-  node_ids <- as.integer(rownames(model$frame))
-  leaf <- tryCatch(get_leaf_node_id(model, one_row), error = function(e) {
-    NA_integer_
-  })
-  path_nodes <- if (!is.na(leaf)) node_ancestors(leaf) else integer(0)
+  # Use ggroc to plot False Positive Rate (0 to 1) vs True Positive Rate (0 to 1)
+  g <- pROC::ggroc(roc_obj, legacy.axes = TRUE) +
+    geom_abline(
+      slope = 1,
+      intercept = 0,
+      linetype = "dashed",
+      color = "gray50"
+    ) +
+    theme_minimal(base_size = 14) +
+    labs(
+      title = paste0(title_text, " (AUC = ", fmt(auc_val), ")"),
+      x = "False Positive Rate (1 - Specificity)",
+      y = "True Positive Rate (Sensitivity)"
+    ) +
+    coord_equal(xlim = c(0, 1), ylim = c(0, 1)) # Perfectly squares and locks the axes
 
-  box_cols <- rep("#EFEFEF", length(node_ids))
-  names(box_cols) <- as.character(node_ids)
-  if (length(path_nodes) > 0) {
-    hit <- intersect(as.character(path_nodes), names(box_cols))
-    box_cols[hit] <- "#FFE3EE"
-  }
-
-  rpart.plot::prp(
-    model,
-    type = 2,
-    extra = 104,
-    fallen.leaves = TRUE,
-    box.col = box_cols,
-    branch.col = "#8A1C3D",
-    shadow.col = "gray85",
-    main = main_title
-  )
-
-  legend(
-    "topleft",
-    legend = c("Patient path", "Other nodes"),
-    fill = c("#FFE3EE", "#EFEFEF"),
-    border = c("#8A1C3D", "gray70"),
-    bty = "n",
-    cex = 0.9
-  )
-  invisible()
+  return(g)
 }
 
-# -------------------------
-# 5) UI
-# -------------------------
-theme_gc <- bs_theme(
-  version = 5,
-  bootswatch = "cosmo",
-  base_font = font_google("Inter"),
-  heading_font = font_google("Inter"),
-  primary = "#8A1C3D",
-  bg = "#ffffff",
-  fg = "#333333"
-)
+# ============================================================================ #
+# UI ====
+# ============================================================================ #
+theme_gc <- bs_theme(version = 5, bootswatch = "cosmo", primary = "#8A1C3D")
 
 ui <- page_navbar(
-  title = "Heart Disease — Tree-Based Methods",
+  id = "main_nav",
+  title = "Tree-Based Methods: Predicting Heart Disease",
   theme = theme_gc,
 
   header = tags$head(
-    tags$style(
-      HTML(
-        "
-        .navbar, .navbar .navbar-brand, .navbar .nav-link { font-weight: 600; }
-        .btn-primary { font-weight: 600; }
-        .info-btn{
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          width:18px;
-          height:18px;
-          margin-left:8px;
-          border-radius:999px;
-          background: var(--bs-primary);
-          color: #fff;
-          font-size:12px;
-          line-height:18px;
-          cursor: pointer;
-          user-select: none;
-        }
-        .info-btn:hover{ filter: brightness(0.95); }
-        "
+    tags$style(HTML(
+      "
+      body { padding-bottom: 80px; } 
+      .tab-pane { padding-bottom: 90px !important; } /* fixes the scroll cut-off */
+      .nav-footer { position: fixed; bottom: 0; left: 0; width: 100%; background: #f8f9fa; 
+                    padding: 15px 20px; border-top: 1px solid #ddd; z-index: 1000; 
+                    display: flex; justify-content: space-between; }
+      .info-btn { display:inline-flex; align-items:center; justify-content:center; width:18px; 
+                  height:18px; margin-left:8px; border-radius:999px; background: var(--bs-primary); 
+                  color: #fff; font-size:12px; cursor: pointer; }
+    "
+    )),
+    tags$script(HTML(
+      "
+      document.addEventListener('DOMContentLoaded', function () {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle=\"tooltip\"]'));
+        tooltipTriggerList.map(function (t) { return new bootstrap.Tooltip(t); });
+      });
+    "
+    ))
+  ),
+
+  # ========================================================================== #
+  ## Tab 1: The problem ----
+  nav_panel(
+    title = "1. The Problem",
+    value = "tab1",
+    layout_column_wrap(
+      width = 1 / 2, # Splits the screen exactly 50/50
+
+      # LEFT SIDE: Text
+      card(
+        h3("Predicting Heart Disease: A Case Study"),
+        p(
+          "In clinical settings, identifying patients at high risk of heart disease quickly and accurately is critical."
+        ),
+        p(
+          "This presentation demonstrates how ",
+          tags$b("Tree-Based Machine Learning"),
+          " can be used to solve this problem. We use historical health data from Cleveland to build a decision tree that learns the 'rules' needed to predict whether an individual is suffering from heart disease or not."
+        ),
+
+        tags$hr(),
+
+        h5("What are Tree-Based Methods?"),
+        p(
+          "Tree-based methods are a powerful but intuitive way to classify data. They work by asking a sequence of simple 'yes or no' questions about the data (e.g., 'Is the patient older than 50?', 'Is their maximum heart rate below 150?')."
+        ),
+        p(
+          "Each answer splits the data into smaller, more specific groups until a final classification - such as 'Healthy' or 'Disease' - is reached. The result looks just like an upside-down tree or a flowchart."
+        ),
+
+        tags$hr(),
+
+        h5("Why Tree-Based Methods?"),
+        tags$ul(
+          tags$li(
+            "They are highly interpretable (you can follow the logic step-by-step)."
+          ),
+          tags$li("They mimic human decision-making processes."),
+          tags$li(
+            "Advanced versions (like Random Forests or 'XGBoost') offer state-of-the-art predictive accuracy."
+          )
+        )
+      ),
+
+      # RIGHT SIDE: Image Graphic
+      card(
+        h5("How a Decision Tree Works"),
+        tags$div(
+          style = "text-align: left; padding: 5px;",
+
+          # description above the image
+          tags$p(
+            "This is an example of a decision tree used to ",
+            tags$em("classify"),
+            " the type of a tree (like Oak, Cherry, or Apple) based on its height and diameter. We start at the top of the tree and apply the first rule - in this case, checking if the diameter is less than or equal to 0.45m. This step-by-step sorting continues until we hit a final 'leaf' at the end of the branch, providing the exact classification."
+          ),
+
+          # image call (Fixed for centering)
+          tags$img(
+            src = "decision_tree_transparent.png",
+            alt = "Illustration of a basic decision tree classifying tree types",
+            style = "display: block; margin-left: auto; margin-right: auto; max-width: 100%; max-height: 400px; height: auto; margin-bottom: 15px;"
+          ),
+
+          # italicized note about training/testing below the image
+          tags$p(
+            style = "font-size: 0.9em; color: #555; text-align: center;",
+            tags$i(
+              "Note: This decision tree is built from an existing set of data. It is then tested and used on separate, new data."
+            )
+          ),
+
+          tags$p(
+            "In machine learning, we split our data into 'training' and 'testing' partitions that do not overlap. The training dataset is used to build the tree, and we evaluate how well the tree performs (how accurately it classifies) using the testing data to ensure it can accurately classify new information."
+          )
+        )
+      )
+    )
+  ),
+
+  # ========================================================================== #
+  ## Tab 2: Data explore ----
+  nav_panel(
+    title = "2. The Data",
+    value = "tab2",
+
+    # top row: summary value boxes
+    layout_column_wrap(
+      width = 1 / 3,
+      value_box(
+        "Observations (Patients)",
+        nrow(heart),
+        theme = "primary",
+        p("total records in our dataset")
+      ),
+      value_box(
+        "Predictor Variables",
+        ncol(heart) - 1,
+        theme = "info",
+        p("available clinical measurements")
+      ),
+      value_box(
+        "Prevalence (Disease = 1)",
+        paste0(
+          round(mean(as.numeric(as.character(heart$target))) * 100, 1),
+          "%"
+        ),
+        theme = "danger",
+        p("proportion of patients with heart disease")
       )
     ),
-    tags$script(
-      HTML(
-        "
-        document.addEventListener('DOMContentLoaded', function () {
-          var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle=\"tooltip\"]'));
-          tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-          });
-        });
-        "
-      )
-    )
-  ),
 
-  nav_panel(
-    "Overview",
+    # middle row: explanations and data dictionary
     layout_column_wrap(
-      width = 1,
-      card(
-        class = "shadow-sm",
-        style = "padding: 20px;",
-        h3(
-          "Heart Disease Risk Prediction Dashboard",
-          style = "margin-top: 0; font-weight: 600;"
-        ),
-        p(
-          "This interactive dashboard demonstrates how tree-based machine learning models can be used to predict the presence of heart disease."
-        ),
-        p(
-          "The application compares a ",
-          tags$b("Decision Tree"),
-          " (transparent, rule-based) with a ",
-          tags$b("Random Forest"),
-          " (ensemble method improving stability)."
-        ),
-        tags$hr(style = "margin-top: 15px; margin-bottom: 15px;"),
-        p(
-          tags$b("Objective: "),
-          "Evaluate interpretability, predictive performance, and the trade-off between sensitivity and specificity using classification thresholds."
-        )
-      ),
-      layout_column_wrap(
-        width = 1 / 3,
-        value_box("Observations", nrow(heart)),
-        value_box("Predictor Variables", ncol(heart) - 1),
-        value_box(
-          "Prevalence (Disease = 1)",
-          paste0(round(mean(as.numeric(as.character(heart$target))), 3))
-        )
-      ),
-      card(
-        class = "shadow-sm",
-        card_header(tags$strong("Variable Definitions")),
-        DTOutput("dict_tbl")
-      )
-    )
-  ),
+      width = 1 / 2,
 
-  # ✅ RESTORED: Case Study Background (with same patient-specific tree diagram)
-  nav_panel(
-    "Case Study Background",
-    layout_sidebar(
-      sidebar = sidebar(
-        h5("Patient inputs"),
-        actionButton(
-          "btn_explain_bg",
-          "Explain my path",
-          class = "btn-primary"
-        ),
-        hr(),
-        helpText(
-          "Click the button to generate the prediction and the highlighted decision tree path for the example patient."
-        )
-      ),
-      layout_column_wrap(
-        width = 1,
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("Prediction summary")),
-          uiOutput("patient_summary_ui_bg")
-        ),
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong(
-            "Patient-specific decision tree (highlighted path)"
-          )),
-          plotOutput("plot_patient_tree_bg", height = 560)
-        )
-      )
-    )
-  ),
-
-  nav_panel(
-    "Explore the data",
-    layout_column_wrap(
-      width = 1,
+      # left side: the problem & teaching points
       card(
-        class = "shadow-sm",
-        card_header(tags$strong("Dataset preview")),
-        div(style = "height: 420px; overflow-y: auto;", DTOutput("data_tbl"))
-      ),
-      layout_column_wrap(
-        width = 1 / 2,
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("Target balance")),
-          plotOutput("plot_target", height = 280)
+        h4("From simple examples to real-world complexity"),
+        p(
+          "Unlike the basic 'tree type' example, real-world data is much more complex. In this case study, we are trying to predict a ",
+          tags$b("target variable"),
+          " (whether a patient has heart disease or not) using 13 different pieces of patient information",
+          tags$b("(predictor variables)"),
+          "."
         ),
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("Correlation (numeric only)")),
-          plotOutput("plot_corr", height = 280)
-        )
-      )
-    )
-  ),
 
-  nav_panel(
-    "Decision tree",
-    layout_sidebar(
-      sidebar = sidebar(
-        h5("Tree controls"),
-        sliderInput(
-          "tree_cp",
-          tagList(
-            "Complexity (cp)",
-            info_icon(
-              "Controls pruning. Higher cp makes the tree simpler. Lower cp allows more splits."
+        # tags$hr(),
+
+        h5("The value of tree-based methods here"),
+        p(
+          "Real-world data is rarely perfect or 'clean'. Tree-based methods are valuable because they are uniquely equipped to handle these complexities:"
+        ),
+        tags$ul(
+          tags$li(
+            tags$b("Handling mixed data types: "),
+            "Our dataset contains both ",
+            tags$i("quantitative"),
+            " (numeric, like Age or Cholesterol) and ",
+            tags$i("qualitative"),
+            " (categorical, like Chest Pain type). Trees can process both naturally without needing complex mathematical transformations."
+          ),
+          tags$li(
+            tags$b("Built-in feature selection: "),
+            "If a specific clinical measurement doesn't help separate healthy patients from sick ones, the tree simply won't use it. It filters out the noise automatically."
+          ),
+          tags$li(
+            tags$b("Capturing complex interactions: "),
+            "Trees easily capture nuanced rules, such as: ",
+            tags$em(
+              "'High cholesterol might only be a strong risk indicator IF the patient is also over 60 years old.'"
+            )
+          )
+        )
+      ),
+
+      # right side: grouped data dictionary
+      card(
+        h4("The 13 predictors explained"),
+        p(
+          "The Cleveland Heart Disease data contains several clinical measurements we can use to predict whether somebody has heart disease, including:"
+        ),
+
+        accordion(
+          open = FALSE, # keeps them closed by default for a clean look
+          accordion_panel(
+            "Demographics & Symptoms",
+            tags$ul(
+              tags$li(tags$b("Age:"), " patient's age in years (Numeric)"),
+              tags$li(
+                tags$b("Sex:"),
+                " gender (0 = Female, 1 = Male) (Nominal)"
+              ),
+              tags$li(
+                tags$b("cp (Chest Pain):"),
+                " type of chest pain (0 = typical angina, 1 = atypical, 2 = non-anginal, 3 = asymptomatic) (Nominal)"
+              )
             )
           ),
-          min = 0.001,
-          max = 0.08,
-          value = 0.01,
-          step = 0.001
+          accordion_panel(
+            "Clinical Vitals",
+            tags$ul(
+              tags$li(
+                tags$b("trestbps:"),
+                " resting blood pressure in mm/Hg (Numeric)"
+              ),
+              tags$li(tags$b("chol:"), " serum cholesterol in mg/dl (Numeric)"),
+              tags$li(
+                tags$b("fbs:"),
+                " fasting blood sugar > 120 mg/dl (0 = False, 1 = True) (Nominal)"
+              )
+            )
+          ),
+          accordion_panel(
+            "Test Results (ECG & Exercise)",
+            tags$ul(
+              tags$li(
+                tags$b("restecg:"),
+                " resting ECG results (0 = Normal, 1 = ST-T wave abnormality, 2 = Left ventricular hypertrophy) (Nominal)"
+              ),
+              tags$li(
+                tags$b("thalach:"),
+                " maximum heart rate achieved (Numeric)"
+              ),
+              tags$li(
+                tags$b("exang:"),
+                " exercise-induced angina (0 = No, 1 = Yes) (Nominal)"
+              ),
+              tags$li(
+                tags$b("oldpeak:"),
+                " exercise-induced ST-depression relative to rest (Numeric)"
+              ),
+              tags$li(
+                tags$b("slope:"),
+                " slope of peak exercise ST segment (0 = upsloping, 1 = flat, 2 = downsloping) (Nominal)"
+              ),
+              tags$li(
+                tags$b("ca:"),
+                " number of major vessels (0–3) colored by fluoroscopy (Nominal)"
+              ),
+              tags$li(
+                tags$b("thal:"),
+                " thalassemia blood disorder (1 = normal, 2 = fixed defect, 3 = reversible defect) (Nominal)"
+              )
+            )
+          )
+        )
+      )
+    )
+  ),
+
+  # ========================================================================== #
+  ## Tab 3: Step-by-step ----
+  nav_panel(
+    title = "3. Building a Tree",
+    value = "tab3",
+
+    # top instructions and dynamic value boxes
+    layout_sidebar(
+      sidebar = sidebar(
+        h5("Growing a Tree"),
+        helpText(
+          "Move the slider to see how the algorithm divides the data step-by-step, learning new rules with each layer.",
+          br(),
+          tags$em(
+            "Note: all scores are calculated here for the training dataset."
+          )
         ),
         sliderInput(
-          "tree_maxdepth",
-          tagList(
-            "Max depth",
-            info_icon("Higher depth allows more splitting but can overfit.")
-          ),
+          "step_depth",
+          "Tree depth level:",
           min = 1,
-          max = 10,
-          value = 4,
-          step = 1
-        ),
-        sliderInput(
-          "tree_minsplit",
-          tagList(
-            "Min split",
-            info_icon(
-              "Minimum observations required to split. Higher values reduce splits."
-            )
-          ),
-          min = 2,
-          max = 60,
-          value = 20,
-          step = 1
-        ),
-        hr(),
-        h5("Decision rule threshold"),
-        sliderInput(
-          "threshold",
-          "Probability cutoff for class=1",
-          min = 0.05,
-          max = 0.95,
-          value = 0.50,
-          step = 0.05
-        ),
-        helpText(
-          "Lower cutoff = more positives predicted (higher sensitivity)."
+          max = 5,
+          value = 1,
+          step = 1,
+          animate = animationOptions(interval = 5000)
         )
       ),
-      layout_column_wrap(
-        width = 1,
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("Decision tree")),
-          plotOutput("plot_tree", height = 560)
-        )
-      ),
+
+      # top row: dynamic stats based on the slider
+      uiOutput("step_metrics_ui"),
+
       layout_column_wrap(
         width = 1 / 2,
+
+        # left side: the traditional tree diagram
         card(
           class = "shadow-sm",
-          card_header(tags$strong("Tree performance")),
-          uiOutput("tree_perf_ui")
+          card_header(tags$strong("The decision rules")),
+
+          # instructions on how to read the tree
+          tags$div(
+            style = "background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 0.9em;",
+            tags$b("How to read the boxes:"),
+            tags$ul(
+              style = "margin-bottom: 0; padding-left: 20px;",
+              tags$li(
+                tags$b("Color: "),
+                "Blue = Predicted Healthy, Red = Predicted Disease."
+              ),
+              tags$li(
+                tags$b("Top text: "),
+                "The final prediction for patients in this group (0 or 1)."
+              ),
+              tags$li(
+                tags$b("Middle text: "),
+                "The probability of having heart disease in this group."
+              ),
+              tags$li(
+                tags$b("Bottom text: "),
+                "The percentage of all patients that fall into this group."
+              )
+            )
+          ),
+
+          plotOutput("plot_step_tree", height = 400)
         ),
+
+        # right side: the 2d problem space with shaded regions
         card(
           class = "shadow-sm",
-          card_header(tags$strong("ROC curve")),
-          plotOutput("plot_tree_roc", height = 320)
+          card_header(tags$strong("The 2D problem space (Age vs Heart Rate)")),
+          plotOutput("plot_step_2d", height = 400),
+
+          # contextual note requested by user
+          tags$p(
+            style = "font-size: 0.9em; color: #555; text-align: center; margin-top: 10px;",
+            tags$i(
+              "Note: This is only a 2D slice of our data. While this simple example segments patients using just two variables, a full machine learning model filters based upon all the other clinical data not shown here, creating a complex, multi-dimensional set of rules."
+            )
+          )
         )
       )
     )
   ),
 
+  # ========================================================================== #
+  ## Tab 4: Full decision tree ----
   nav_panel(
-    "Walk a patient",
+    title = "4. Full Decision Tree",
+    value = "tab4",
+
     layout_sidebar(
       sidebar = sidebar(
-        h5("Patient inputs"),
-        numericInput("p_age", "Age", value = 55, min = 1, max = 120),
-        selectInput(
-          "p_sex",
-          "Sex (0=female, 1=male)",
-          choices = levels(train$sex),
-          selected = levels(train$sex)[1]
+        h5("1. Patient Profile"),
+        helpText(
+          tags$b("Feature Selection in action: "),
+          "Even though we provided 13 variables, the optimal tree only needs these 5 key metrics to make its predictions. Adjust them to see the path change!"
         ),
+
+        # updated inputs to match the tree's actual splits
         selectInput(
           "p_cp",
-          "Chest pain type (cp)",
-          choices = levels(train$cp),
-          selected = levels(train$cp)[1]
-        ),
-        numericInput(
-          "p_trestbps",
-          "Resting BP (trestbps)",
-          value = 130,
-          min = 50,
-          max = 260
-        ),
-        numericInput(
-          "p_chol",
-          "Cholesterol (chol)",
-          value = 240,
-          min = 50,
-          max = 700
+          "Chest Pain Type (cp)",
+          choices = c(
+            "Typical Angina" = "0",
+            "Atypical" = "1",
+            "Non-anginal" = "2",
+            "Asymptomatic" = "3"
+          ),
+          selected = "3"
         ),
         selectInput(
-          "p_fbs",
-          "Fasting blood sugar >120 (fbs)",
-          choices = levels(train$fbs),
-          selected = levels(train$fbs)[1]
+          "p_ca",
+          "Major Vessels Colored (ca)",
+          choices = c("0" = "0", "1" = "1", "2" = "2", "3" = "3"),
+          selected = "0"
         ),
         selectInput(
-          "p_restecg",
-          "Resting ECG (restecg)",
-          choices = levels(train$restecg),
-          selected = levels(train$restecg)[1]
-        ),
-        numericInput(
-          "p_thalach",
-          "Max heart rate (thalach)",
-          value = 150,
-          min = 50,
-          max = 260
-        ),
-        selectInput(
-          "p_exang",
-          "Exercise angina (exang)",
-          choices = levels(train$exang),
-          selected = levels(train$exang)[1]
+          "p_thal",
+          "Thalassemia (thal)",
+          choices = c(
+            "Normal" = "1",
+            "Fixed Defect" = "2",
+            "Reversible Defect" = "3"
+          ),
+          selected = "1"
         ),
         numericInput(
           "p_oldpeak",
-          "Oldpeak",
+          "ST Depression (oldpeak)",
           value = 1.0,
           min = 0,
-          max = 10,
+          max = 6.2,
           step = 0.1
         ),
         selectInput(
           "p_slope",
-          "ST slope (slope)",
-          choices = levels(train$slope),
-          selected = levels(train$slope)[1]
+          "ST Slope (slope)",
+          choices = c("Upsloping" = "0", "Flat" = "1", "Downsloping" = "2"),
+          selected = "1"
         ),
-        selectInput(
-          "p_ca",
-          "Major vessels (ca)",
-          choices = levels(train$ca),
-          selected = levels(train$ca)[1]
+
+        actionButton(
+          "btn_predict",
+          "Predict Patient Path & Condition",
+          class = "btn-primary"
         ),
-        selectInput(
-          "p_thal",
-          "Thal (thal)",
-          choices = levels(train$thal),
-          selected = levels(train$thal)[1]
-        ),
-        actionButton("btn_explain", "Explain my path", class = "btn-primary"),
-        hr(),
+        uiOutput("predicted_condition_ui"),
+
+        tags$hr(),
+
+        h5("2. Model Complexity"),
         helpText(
-          "This will show a decision tree with your patient path highlighted."
-        )
-      ),
-      layout_column_wrap(
-        width = 1,
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("Prediction summary")),
-          uiOutput("patient_summary_ui")
+          "Trees can grow too complex and 'overfit' the training data. Pruning helps it generalise to new patients."
         ),
+        checkboxInput(
+          "auto_cp",
+          "Use optimal complexity (Auto-prune)",
+          value = TRUE
+        ),
+
+        # this slider only appears if the checkbox above is UNTICKED
+        conditionalPanel(
+          condition = "!input.auto_cp",
+          sliderInput(
+            "tree_cp",
+            "Pruning strength (lower = more complex tree):",
+            min = 0.001,
+            max = 0.04,
+            value = 0.01,
+            step = 0.005
+          ),
+          helpText(
+            "This control is the model’s complexity parameter: higher values prune more resulting in a simpler tree."
+          )
+        ),
+      ),
+
+      # top row: testing data performance metrics
+      uiOutput("tab4_metrics_ui"),
+
+      layout_column_wrap(
+        width = 1, # single column for a nice wide tree
         card(
           class = "shadow-sm",
-          card_header(tags$strong(
-            "Patient-specific decision tree (highlighted path)"
-          )),
-          plotOutput("plot_patient_tree", height = 560)
+          card_header(tags$strong("The full clinical decision tree")),
+          plotOutput("plot_full_tree", height = 500),
+
+          tags$p(
+            style = "font-size: 0.9em; color: #555; text-align: center; margin-top: 10px;",
+            tags$i(
+              "Note: This tree was built using the Training Data, but the accuracy scores above are calculated using the unseen Testing Data to see how well the tree works on new data. To see a full patient profile calculator: ",
+              tags$a(
+                href = "https://3enji.shinyapps.io/smm636-a01-tree-based-methods-standalone-tab4/",
+                target = "_blank",
+                "Click Here"
+              )
+            )
+          )
         )
       )
     )
   ),
 
+  # ========================================================================== #
+  # ========================================================================== #
+  ## Tab 5: Ensembles ----
   nav_panel(
-    "Random forest",
-    layout_sidebar(
-      sidebar = sidebar(
-        h5("Forest controls"),
-        sliderInput(
-          "rf_ntree",
-          tagList(
-            "Number of trees (ntree)",
-            info_icon(
-              "More trees usually improves stability but increases run time."
+    title = "5. Ensembles",
+    value = "tab5",
+
+    navset_card_underline(
+      ### subtab 1 ----
+      # --- Subtab 1: RF Explanation ---
+      nav_panel(
+        "1. What is a Random Forest?",
+        layout_column_wrap(
+          width = 1 / 2,
+          card(
+            h4("The wisdom of crowds"),
+            p(
+              "A Decision Tree is great, but it has a flaw - it can easily over-memorise the training data (overfitting) and become unstable. If you change the data slightly, the tree changes completely."
+            ),
+            p(
+              "A ",
+              tags$b("Random Forest"),
+              " solves this by building hundreds of different decision trees. To make sure the trees aren't all identical, the algorithm uses two tricks:"
+            ),
+            tags$ul(
+              tags$li(
+                tags$b("Bootstrapping: "),
+                "Each tree is trained on a random, slightly different subset of the patients."
+              ),
+              tags$li(
+                tags$b("Feature Sampling: "),
+                "At each split, the tree is only allowed to look at a random subset of the clinical variables."
+              )
+            ),
+            p(
+              "When a new patient arrives, all 500 trees 'vote' on the diagnosis. The majority wins. This approach typically improves accuracy and stability."
+            ),
+            tags$div(
+              style = "text-align: left; padding-top: 2px;",
+              tags$p(
+                "In our case study, random forests can help to identify which clinical variables reliably drive predictions across many different trees, highlighting factors that are consistently informative."
+              )
             )
           ),
-          min = 50,
-          max = 800,
-          value = 300,
-          step = 25
-        ),
-        sliderInput(
-          "rf_mtry",
-          tagList(
-            "mtry (features per split)",
-            info_icon("How many predictors are sampled at each split.")
+          card(
+            h5("Random Forest visualised"),
+
+            tags$div(
+              style = "text-align: center;",
+              tags$img(
+                src = "rf_intro_graphic.png",
+                style = "display:block; margin:0 auto; max-width:100%; max-height:350px; height:auto;"
+              )
+            ),
+
+            tags$p(
+              style = "text-align: center; padding: 12px 0 0 0; margin: 0;",
+              tags$em(
+                "Image from https://www.grammarly.com/blog/ai/what-is-random-forest/ (accessed 27/02/2025)."
+              )
+            ),
+          )
+        )
+      ),
+
+      ### subtab 2 ----
+      # --- Subtab 2: RF Implementation ---
+      nav_panel(
+        "2. Random Forest in Action",
+
+        layout_sidebar(
+          sidebar = sidebar(
+            h5("Forest Controls"),
+            sliderInput(
+              "rf_ntree",
+              "Number of trees in forest:",
+              min = 50,
+              max = 500,
+              value = 200,
+              step = 50
+            ),
+            hr(),
+            h5("Inspect Individual Trees"),
+            helpText(
+              "Cycle through the simulated trees that make up the forest to see how different they are from each other."
+            ),
+            sliderInput(
+              "rf_tree_index",
+              "Tree Index to View:",
+              min = 1,
+              max = 20,
+              value = 1,
+              step = 1
+            )
           ),
-          min = 1,
-          max = ncol(train) - 1,
-          value = max(1, floor(sqrt(ncol(train) - 1))),
-          step = 1
+
+          # Top row: Comparative stats (Forest vs individual selected tree)
+          uiOutput("rf_comparative_metrics_ui"),
+
+          layout_column_wrap(
+            width = 1 / 2,
+            card(
+              class = "shadow-sm",
+              uiOutput("rf_tree_header_ui"), # (⌐■_■)
+              plotOutput("plot_rf_individual_tree", height = 400)
+            ),
+            card(
+              class = "shadow-sm",
+              card_header(tags$strong("Overall Forest variable importance")),
+              plotOutput("plot_rf_imp", height = 400),
+              p(
+                class = "text-muted",
+                style = "margin: 0.5rem 1rem 0.75rem 1rem; font-size: 0.9rem; line-height: 1.25;",
+                "Because drawing hundreds of trees is hard to read, we summarise them with a bar chart. Variables nearer the top carried the most weight in the model’s decisions."
+              )
+            )
+          )
         )
       ),
-      layout_column_wrap(
-        width = 1 / 2,
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("Variable importance (Top 10)")),
-          plotOutput("plot_rf_imp", height = 380)
-        ),
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("Random forest performance")),
-          uiOutput("rf_perf_ui")
+
+      ### subtab 3 ----
+      # --- Subtab 3: XGBoost Explanation ---
+      nav_panel(
+        "3. What is XGBoost?",
+        layout_column_wrap(
+          width = 1 / 2,
+          card(
+            h4("Learning from mistakes"),
+            p(
+              "While a Random Forest builds hundreds of trees independently at the same time, ",
+              tags$b("Boosted Trees (XGBoost)"),
+              " build trees sequentially - one after another."
+            ),
+            p(
+              "Each new tree looks specifically at the patients that the previous trees misclassified, and tries to correct those specific mistakes. This is similar to a student taking a practice test, seeing what they got wrong, and studying only those topics for the next test."
+            ),
+            tags$ul(
+              tags$li(
+                tags$b("Learning Rate: "),
+                "Controls how aggressive the corrections are. A smaller rate means it learns slower but avoids over-correcting."
+              ),
+              tags$li(
+                tags$b("Max Depth: "),
+                "Boosted trees are usually kept very shallow (called 'stumps') so they don't overfit."
+              )
+            ),
+            p(
+              "XGBoost is often considered the most powerful algorithm for tabular real-world data."
+            )
+          ),
+          card(
+            h5("XGBoost algorithm visualised"),
+            tags$div(
+              style = "text-align: center; padding: 20px;",
+              tags$img(
+                src = "xgb_intro_graphic.png",
+                style = "max-width: 100%; max-height: 550px; "
+              )
+            )
+          )
         )
       ),
-      layout_column_wrap(
-        width = 1,
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("ROC curve (Random Forest)")),
-          plotOutput("plot_rf_roc", height = 320)
+
+      ### subtab 4 ----
+      # --- Subtab 4: XGBoost Implementation ---
+      nav_panel(
+        "4. XGBoost in Action",
+        layout_sidebar(
+          sidebar = sidebar(
+            h5("XGBoost controls"),
+            sliderInput(
+              "xgb_num_boost_round",
+              "Number of Boosting rounds (Trees):",
+              min = 1,
+              max = 20,
+              value = 10,
+              step = 1
+            ),
+            sliderInput(
+              "xgb_max_depth",
+              "Max Tree Depth:",
+              min = 1,
+              max = 4,
+              value = 3,
+              step = 1
+            ),
+            sliderInput(
+              "xgb_eta",
+              "Learning Rate:",
+              min = 0.05,
+              max = 1,
+              value = 0.3,
+              step = 0.05
+            ),
+            actionButton(
+              "btn_train_xgb",
+              "Train XGBoost",
+              class = "btn-primary"
+            ),
+            hr(),
+            sliderInput(
+              "xgb_tree_index",
+              "Tree index to display:",
+              min = 1,
+              max = 10,
+              value = 1,
+              step = 1
+            ),
+            hr(),
+            h5("Decision rule threshold"),
+            sliderInput(
+              "xg_threshold",
+              "Probability cutoff for class=1",
+              min = 0.05,
+              max = 0.95,
+              value = 0.50,
+              step = 0.05
+            ),
+            helpText(
+              "Lower cutoff = more positives predicted (higher sensitivity)."
+            )
+          ),
+          layout_column_wrap(
+            width = 1 / 2,
+            card(
+              class = "shadow-sm",
+              card_header(uiOutput("header_plot_xgb_tree")),
+              grVizOutput("plot_xgb_tree")
+            ),
+            card(
+              class = "shadow-sm",
+              card_header(tags$strong("XGBoost Performance")),
+              uiOutput("xgb_perf_ui")
+            )
+          ),
+          layout_column_wrap(
+            width = 1 / 2,
+            card(
+              class = "shadow-sm",
+              card_header(tags$strong("Feature Importance")),
+              plotOutput("xgb_feature_imp")
+            ),
+            card(
+              class = "shadow-sm",
+              card_header(tags$strong("ROC Curve")),
+              plotOutput("plot_xg_tree_roc", height = 320)
+            )
+          )
         )
       )
     )
   ),
 
+  # ========================================================================== #
+  ## Tab 6: Takeaways ----
   nav_panel(
-    "XG Boosted",
-    layout_sidebar(
-      sidebar = sidebar(
-        h5("XGBoost controls"),
-        sliderInput(
-          "xgb_num_boost_round",
-          "Number of Boosting rounds",
-          min = 1,
-          max = 10,
-          value = 3,
-          step = 1
+    title = "6. Takeaways",
+    value = "tab6",
+    layout_column_wrap(
+      width = 1 / 2, # Splits the screen exactly 50/50
+
+      # LEFT SIDE: Text summarizing the models
+      card(
+        h3("Which model is the right choice?"),
+        p(
+          "In data analytics, there is rarely a single 'perfect' algorithm. Choosing which tree-based approach involves balancing ",
+          tags$b("accuracy"),
+          " with ",
+          tags$b("interpretability."),
         ),
-        sliderInput(
-          "xgb_max_depth",
-          "Max Depth",
-          min = 1,
-          max = 10,
-          value = 3,
-          step = 1
+
+        tags$hr(),
+
+        h5("1. Decision Trees"),
+        # p(tags$b("The clear communicator.")),
+        tags$ul(
+          tags$li(
+            "Highly transparent and easy to explain to stakeholders or regulators."
+          ),
+          tags$li("Mimics human decision-making processes."),
+          tags$li(
+            tags$span(
+              style = "color: #e74c3c; font-weight: bold;",
+              "Limitation: "
+            ),
+            "Prone to overfitting and generally has the lowest predictive accuracy of the three."
+          )
         ),
-        sliderInput(
-          "xgb_eta",
-          "Learning ",
-          min = 0,
-          max = 1,
-          value = 1,
-          step = 0.05
+
+        # tags$hr(),
+
+        h5("2. Random Forests"),
+        # p(tags$b("The stable workhorse.")),
+        tags$ul(
+          tags$li("Excellent out-of-the-box predictive accuracy."),
+          tags$li(
+            "Highly resistant to overfitting due to 'the wisdom of crowds' (averaging hundreds of independent trees)."
+          ),
+          tags$li(
+            tags$span(
+              style = "color: #e74c3c; font-weight: bold;",
+              "Limitation: "
+            ),
+            "It is a 'black box'. We can see which variables are important overall, but we cannot easily draw a single flowchart for a specific patient."
+          )
         ),
-        actionButton("btn_train_xgb", "Train XGBoost", class = "btn-primary"),
-        hr(),
-        sliderInput(
-          "xgb_tree_index",
-          "Tree index to display",
-          min = 1,
-          max = 10,
-          value = 1,
-          step = 1
-        ),
-        hr(),
-        h5("Decision rule threshold"),
-        sliderInput(
-          "xg_threshold",
-          "Probability cutoff for class=1",
-          min = 0.05,
-          max = 0.95,
-          value = 0.50,
-          step = 0.05
-        ),
-        helpText(
-          "Lower cutoff = more positives predicted (higher sensitivity)."
+        #
+        # tags$hr(),
+
+        h5("3. XGBoost"),
+        # p(tags$b("The precision instrument.")),
+        tags$ul(
+          tags$li(
+            "Often provides state-of-the-art, best-in-class predictive accuracy."
+          ),
+          tags$li(
+            "Learns sequentially from its own mistakes to optimise performance."
+          ),
+          tags$li(
+            tags$span(
+              style = "color: #e74c3c; font-weight: bold;",
+              "Limitation: "
+            ),
+            "Requires careful mathematical tuning to prevent it from memorising the noise in the data. Also a 'black box'."
+          )
         )
       ),
-      layout_column_wrap(
-        width = 1,
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("Selected XGBoost Tree")),
-          grVizOutput("plot_xgb_tree")
-        )
-        #plotOutput("plot_xgb_tree", height = 560))
-      ),
-      layout_column_wrap(
-        width = 1 / 2,
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong(" performance")),
-          verbatimTextOutput("xg_tree_perf")
-        ),
-        card(
-          class = "shadow-sm",
-          card_header(tags$strong("ROC curve")),
-          plotOutput("plot_xg_tree_roc", height = 320)
+
+      # rhs: final pitch
+      card(
+        h5("Our Approach"),
+        tags$div(
+          style = "text-align: left; padding: 5px;",
+
+          tags$p(
+            "As actuaries and data professionals, we are passionate about building highly accurate models and explaining them in real, understandable terms. We don't just apply complex algorithms blindly, we partner with you to ensure our solutions align with your specific business needs:"
+          ),
+
+          tags$ul(
+            tags$li(
+              "If your priority is ",
+              tags$b("regulatory compliance and transparency"),
+              " (e.g., explaining exactly why a policy was priced a certain way), optimised ",
+              tags$b("Decision Trees"),
+              " may be more effective."
+            ),
+            tags$li(
+              "If your priority is ",
+              tags$b("pure predictive power"),
+              " (e.g., catching as many fraudulent claims as possible), ensemble methods, such as ",
+              tags$b("XGBoost or Random Forest"),
+              " may be more suitable."
+            )
+          ),
+
+          tags$br(),
+
+          tags$div(
+            style = "background-color: #f8f9fa; padding: 15px; border-left: 4px solid #8A1C3D; border-radius: 4px;",
+            tags$p(
+              style = "font-weight: bold; font-size: 1.1em; color: #333; margin-bottom: 0;",
+              HTML(
+                "At ABBA<sup>*</sup> Actuarial Consulting we specialise in making complex models easy and effective for you and your business."
+              )
+            )
+          ),
+
+          tags$br(),
+          tags$br(),
+
+          tags$p(
+            style = "font-size: 1.0em; color: #555; text-align: center;",
+            tags$i("Thank you for exploring this interactive case study.")
+          ),
+
+          tags$hr(
+            style = "margin-top: 30px; margin-bottom: 10px; border-top: 1px dashed #ccc;"
+          ),
+          tags$p(
+            style = "font-size: 0.8em; color: #888; text-align: left; margin-bottom: 0;",
+            HTML(
+              "<sup>*</sup> Abudlmatin, Ben, Basmah, & Ardi Actuarial Consulting <i>(trademark pending)</i>."
+            )
+          )
         )
       )
     )
+  ),
+
+  ## Footer navigation ----
+  # --- FOOTER NAVIGATION ---
+  footer = tags$div(
+    class = "nav-footer",
+    actionButton("btn_prev", "← Previous Step", class = "btn-secondary"),
+    actionButton("btn_next", "Next Step →", class = "btn-primary")
   )
 )
 
-# -------------------------
-# 6) SERVER
-# -------------------------
+# ============================================================================ #
+# Server ====
+# ============================================================================ #
 server <- function(input, output, session) {
-  output$dict_tbl <- DT::renderDT(
-    {
-      DT::datatable(
-        feature_dictionary(),
-        options = list(pageLength = 8, dom = "tip"),
-        rownames = FALSE
-      )
-    },
-    server = FALSE
-  )
+  # Navigation Logic
+  tab_order <- c("tab1", "tab2", "tab3", "tab4", "tab5", "tab6")
 
-  output$data_tbl <- DT::renderDT(
-    {
-      DT::datatable(
-        heart,
-        options = list(pageLength = 10, scrollX = TRUE),
-        rownames = FALSE
-      )
-    },
-    server = FALSE
-  )
-
-  output$plot_target <- renderPlot({
-    ggplot(heart, aes(x = target)) +
-      geom_bar() +
-      labs(x = "Target (0=no disease, 1=disease)", y = "Count") +
-      theme_minimal(base_size = 13)
+  observeEvent(input$btn_next, {
+    curr <- input$main_nav
+    idx <- which(tab_order == curr)
+    if (length(idx) == 1 && idx < length(tab_order)) {
+      updateNavbarPage(session, "main_nav", selected = tab_order[idx + 1])
+    }
   })
 
-  output$plot_corr <- renderPlot({
-    num_df <- heart %>% select(where(is.numeric))
-    if (ncol(num_df) < 2) {
+  observeEvent(input$btn_prev, {
+    curr <- input$main_nav
+    idx <- which(tab_order == curr)
+    if (length(idx) == 1 && idx > 1) {
+      updateNavbarPage(session, "main_nav", selected = tab_order[idx - 1])
+    }
+  })
+
+  # ========================================================================== #
+  ## Tab 2: Data explore server logic ----
+
+  # render the target balance bar chart
+  output$plot_target <- renderPlot({
+    ggplot(heart, aes(x = target, fill = target)) +
+      geom_bar() +
+      scale_fill_manual(values = c("0" = "#4A90E2", "1" = "#8A1C3D")) +
+      labs(x = "Target (0 = Healthy, 1 = Disease)", y = "Patient Count") +
+      theme_minimal(base_size = 14) +
+      theme(legend.position = "none")
+  })
+
+  # ========================================================================== #
+  ## Tab 3: Step-by-step server logic ----
+
+  # build a model using only age and thalach restricted by the depth slider
+  step_model <- reactive({
+    req(input$step_depth)
+    rpart(
+      target ~ age + thalach,
+      data = train,
+      method = "class",
+      control = rpart.control(
+        maxdepth = input$step_depth,
+        cp = -1,
+        minsplit = 2
+      )
+    )
+  })
+
+  # dynamic value boxes for the top of tab 3
+  output$step_metrics_ui <- renderUI({
+    req(step_model())
+
+    # get predictions for current tree depth
+    preds <- predict(step_model(), train, type = "class")
+    actual <- train$target
+
+    # calculate overall accuracy
+    acc <- sum(preds == actual) / nrow(train)
+
+    # calculate 'confidence' metrics
+    healthy_idx <- which(preds == "0")
+    conf_healthy <- if (length(healthy_idx) > 0) {
+      sum(actual[healthy_idx] == "0") / length(healthy_idx)
+    } else {
+      0
+    }
+
+    disease_idx <- which(preds == "1")
+    conf_disease <- if (length(disease_idx) > 0) {
+      sum(actual[disease_idx] == "1") / length(disease_idx)
+    } else {
+      0
+    }
+
+    # percentages of population
+    pct_healthy <- length(healthy_idx) / nrow(train)
+    pct_disease <- length(disease_idx) / nrow(train)
+
+    layout_column_wrap(
+      width = 1 / 3,
+      value_box(
+        "Current Accuracy",
+        paste0(round(acc * 100, 1), "%"),
+        theme = "success",
+        p("how often the current rules are correct")
+      ),
+      value_box(
+        "Predicted Healthy (NPV)",
+        paste0(round(pct_healthy * 100, 1), "%"),
+        # custom theme to match the background blue exactly
+        theme = value_box_theme(bg = "#4A90E2", fg = "white"),
+        p(paste0(
+          "(",
+          round(conf_healthy * 100, 1),
+          "% of these were actually healthy)"
+        ))
+      ),
+      value_box(
+        "Predicted Disease (PPV)",
+        paste0(round(pct_disease * 100, 1), "%"),
+        theme = "danger",
+        p(paste0(
+          "(",
+          round(conf_disease * 100, 1),
+          "% of these were actually sick)"
+        ))
+      )
+    )
+  })
+
+  # render the traditional tree diagram
+  output$plot_step_tree <- renderPlot({
+    m <- step_model()
+    # colors matching the prediction: 0 (Healthy) = Blue, 1 (Disease) = Red
+    box_colors <- ifelse(m$frame$yval == 1, "#4A90E2", "#c3436a")
+
+    rpart.plot(
+      m,
+      type = 2,
+      extra = 104,
+      fallen.leaves = FALSE,
+      main = "",
+      box.col = box_colors,
+      shadow.col = "gray90"
+    )
+  })
+
+  # render the 2d scatter plot with dynamic decision boundaries
+  output$plot_step_2d <- renderPlot({
+    m <- step_model()
+
+    grid_data <- expand.grid(
+      age = seq(
+        min(train$age, na.rm = T),
+        max(train$age, na.rm = T),
+        length.out = 150
+      ),
+      thalach = seq(
+        min(train$thalach, na.rm = T),
+        max(train$thalach, na.rm = T),
+        length.out = 150
+      )
+    )
+
+    grid_data$pred_class <- predict(m, newdata = grid_data, type = "class")
+
+    ggplot() +
+      geom_raster(
+        data = grid_data,
+        aes(x = age, y = thalach, fill = pred_class),
+        alpha = 0.4
+      ) +
+      geom_point(
+        data = train,
+        aes(x = age, y = thalach, color = target),
+        size = 2.5,
+        shape = 16
+      ) +
+      scale_color_manual(
+        values = c("0" = "#4A90E2", "1" = "#8A1C3D"),
+        name = "Actual Status",
+        labels = c("Healthy", "Disease")
+      ) +
+      scale_fill_manual(
+        values = c("0" = "#4A90E2", "1" = "#8A1C3D"),
+        guide = "none"
+      ) +
+      theme_minimal(base_size = 14) +
+      labs(x = "Age (Years)", y = "Max Heart Rate (thalach)") +
+      theme(legend.position = "bottom")
+  })
+
+  # FIX: These lines ensure the plots load even before the tab is clicked
+  outputOptions(output, "plot_step_tree", suspendWhenHidden = FALSE)
+  outputOptions(output, "plot_step_2d", suspendWhenHidden = FALSE)
+
+  # ========================================================================== #
+  # ========================================================================== #
+  ## Tab 4: Full decision tree server logic ----
+
+  # determine the complexity parameter based on the checkbox
+  current_cp <- reactive({
+    if (input$auto_cp) {
+      0.015 # a hardcoded 'optimal' value that produces a clean, readable tree
+    } else {
+      req(input$tree_cp)
+      input$tree_cp
+    }
+  })
+
+  # build the full tree using all 13 variables on the training data
+  full_tree_model <- reactive({
+    rpart(
+      target ~ .,
+      data = train,
+      method = "class",
+      control = rpart.control(cp = current_cp())
+    )
+  })
+
+  # calculate testing metrics for the top value boxes
+  output$tab4_metrics_ui <- renderUI({
+    m <- full_tree_model()
+
+    # PREDICT ON THE UNSEEN TESTING DATA
+    preds <- predict(m, test, type = "class")
+    actual <- test$target
+
+    cm <- table(Predicted = preds, Actual = actual)
+    acc <- sum(diag(cm)) / sum(cm)
+
+    # sensitivity: true positive rate (how many sick people did we catch?)
+    sens <- if (sum(actual == "1") > 0) cm["1", "1"] / sum(actual == "1") else 0
+    # specificity: true negative rate (how many healthy people did we clear?)
+    spec <- if (sum(actual == "0") > 0) cm["0", "0"] / sum(actual == "0") else 0
+
+    layout_column_wrap(
+      width = 1 / 3,
+      value_box(
+        "Real-World Accuracy",
+        paste0(round(acc * 100, 1), "%"),
+        theme = "success",
+        p("performance on unseen testing data")
+      ),
+      value_box(
+        "Sensitivity (Caught Heart Disease)",
+        paste0(round(sens * 100, 1), "%"),
+        theme = "danger",
+        p("correctly identified heart disease cases")
+      ),
+      value_box(
+        "Specificity (Cleared Healthy)",
+        paste0(round(spec * 100, 1), "%"),
+        theme = value_box_theme(bg = "#4A90E2", fg = "white"),
+        p("correctly identified healthy cases")
+      )
+    )
+  })
+
+  # handle the patient prediction button click
+  patient_leaf <- reactiveVal(NULL)
+  patient_pred <- reactiveVal(NULL)
+
+  observeEvent(input$btn_predict, {
+    # 1. take the first row of training data to get the exact data structure & factor levels
+    one <- train[1, , drop = FALSE]
+
+    # 2. override the 5 variables exposed in the UI (the ones the tree actually uses)
+    one$cp <- factor(input$p_cp, levels = levels(train$cp))
+    one$ca <- factor(input$p_ca, levels = levels(train$ca))
+    one$thal <- factor(input$p_thal, levels = levels(train$thal))
+    one$slope <- factor(input$p_slope, levels = levels(train$slope))
+    one$oldpeak <- input$p_oldpeak
+
+    # 3. safely hold all the ignored variables at median/mode so the model doesn't crash
+    one$age <- median(train$age, na.rm = TRUE)
+    one$sex <- factor("1", levels = levels(train$sex))
+    one$trestbps <- median(train$trestbps, na.rm = TRUE)
+    one$chol <- median(train$chol, na.rm = TRUE)
+    one$thalach <- median(train$thalach, na.rm = TRUE)
+    one$fbs <- factor("0", levels = levels(train$fbs))
+    one$restecg <- factor("0", levels = levels(train$restecg))
+    one$exang <- factor("0", levels = levels(train$exang))
+
+    # 4. BUG FIX: duplicate the row to bypass the rpart 1-row dimension bug
+    two_rows <- rbind(one, one)
+
+    # 5. get the matrix prediction and match its counts to the tree frame
+    m <- full_tree_model()
+    # predict class
+    pred_class <- as.character(predict(m, two_rows, type = "class")[1])
+    patient_pred(pred_class)
+    pred_mat <- predict(m, two_rows, type = "matrix")
+
+    # columns 2 and 3 of the matrix hold the exact counts of healthy/sick in that specific leaf
+    leaf_idx <- which(
+      m$frame$var == "<leaf>" &
+        m$frame$yval2[, 2] == pred_mat[1, 2] &
+        m$frame$yval2[, 3] == pred_mat[1, 3]
+    )
+
+    if (length(leaf_idx) > 0) {
+      patient_leaf(as.integer(rownames(m$frame)[leaf_idx[1]]))
+    } else {
+      patient_leaf(NULL)
+    }
+  })
+
+  # predicted condition output
+  output$predicted_condition_ui <- renderUI({
+    p <- patient_pred()
+    if (is.null(p)) {
       return(NULL)
     }
-    cmat <- cor(num_df, use = "pairwise.complete.obs")
-    df_long <- as.data.frame(as.table(cmat))
-    colnames(df_long) <- c("Var1", "Var2", "Corr")
 
-    ggplot(df_long, aes(Var1, Var2, fill = Corr)) +
-      geom_tile() +
-      coord_equal() +
-      labs(x = "", y = "") +
-      theme_minimal(base_size = 12) +
-      theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  })
+    label <- if (p == "1") "Heart disease" else "No heart disease"
+    col <- if (p == "1") "#c3436a" else "#4A90E2"
 
-  # ---- Main Decision Tree (controlled by sliders)
-  tree_model <- reactive({
-    rpart(
-      target ~ .,
-      data = train,
-      method = "class",
-      control = rpart.control(
-        cp = input$tree_cp,
-        maxdepth = input$tree_maxdepth,
-        minsplit = input$tree_minsplit
+    tags$div(
+      style = "margin-top:12px;",
+      tags$div(style = "font-size:0.95rem; color:#666;", "Predicted condition"),
+      tags$div(
+        style = sprintf(
+          "margin-top:6px; display:inline-block; padding:8px 12px; border-radius:999px;
+       font-weight:700; font-size:1.1rem; color:white; background:%s;",
+          col
+        ),
+        label
       )
     )
   })
 
-  # ---- Explainer Tree (used ONLY to ensure a meaningful patient path)
-  explainer_tree_model <- reactive({
-    rpart(
-      target ~ .,
-      data = train,
-      method = "class",
-      control = rpart.control(
-        cp = 0.001,
-        maxdepth = 6,
-        minsplit = 8
-      )
-    )
+  # if the tree structure changes (e.g., user changes cp), reset the patient highlight
+  observeEvent(full_tree_model(), {
+    patient_leaf(NULL)
+    patient_pred(NULL)
   })
 
-  output$plot_tree <- renderPlot({
+  # render the full tree, highlighting the path if the button was clicked
+  output$plot_full_tree <- renderPlot({
+    m <- full_tree_model()
+    node_ids <- as.integer(rownames(m$frame))
+
+    # default colors (blue vs red)
+    box_colors <- ifelse(m$frame$yval == 1, "#c3436a", "#4A90E2")
+    names(box_colors) <- as.character(node_ids)
+
+    # if a patient was predicted, calculate the path and highlight it in gold
+    leaf <- patient_leaf()
+    if (!is.null(leaf)) {
+      path <- integer(0)
+      curr <- leaf
+      while (!is.na(curr) && curr >= 1) {
+        path <- c(path, curr)
+        if (curr == 1) {
+          break
+        }
+        curr <- floor(curr / 2)
+      }
+
+      # dim all boxes slightly, then turn the patient's path bright gold
+      box_colors[] <- "#EFEFEF"
+      hits <- intersect(as.character(path), names(box_colors))
+      box_colors[hits] <- "#FFD700"
+    }
+
     rpart.plot(
-      tree_model(),
+      m,
       type = 2,
       extra = 104,
       fallen.leaves = TRUE,
-      main = ""
+      main = "",
+      box.col = box_colors,
+      shadow.col = "gray90"
     )
   })
 
-  tree_perf_obj <- reactive({
-    prob_mat <- predict(tree_model(), test, type = "prob")
-    prob1 <- get_prob1_safe(prob_mat)
-    pred_class <- ifelse(prob1 >= input$threshold, "1", "0")
-    pred_class <- factor(pred_class, levels = c("0", "1"))
+  outputOptions(output, "plot_full_tree", suspendWhenHidden = FALSE)
+
+  # ========================================================================== #
+  ## Tab 5: Ensembles server logic ----
+
+  # Helper function to generate the green/red comparison UI
+  render_delta_ui <- function(title_text, forest_val, tree_val, theme_color) {
+    diff <- forest_val - tree_val
+    color <- if (diff > 0) {
+      "#27ae60"
+    } else if (diff < 0) {
+      "#e74c3c"
+    } else {
+      "gray"
+    }
+    arrow <- if (diff > 0) {
+      "▲"
+    } else if (diff < 0) {
+      "▼"
+    } else {
+      "-"
+    }
+
+    value_box(
+      title_text,
+      paste0(round(forest_val * 100, 1), "%"),
+      theme = theme_color,
+      tags$div(
+        style = paste(
+          "color:",
+          color,
+          "; font-size: 0.9rem; font-weight: bold; background: white; padding: 2px 6px; border-radius: 4px; display: inline-block;"
+        ),
+        paste0(
+          arrow,
+          " ",
+          round(abs(diff) * 100, 1),
+          "% vs selected individual tree"
+        )
+      )
+    )
+  }
+
+  # --- RF Logic ---
+  rf_model <- reactive({
+    randomForest(
+      target ~ .,
+      data = train,
+      ntree = input$rf_ntree,
+      importance = TRUE
+    )
+  })
+
+  # Simulate an individual tree
+  rf_individual_tree <- reactive({
+    set.seed(input$rf_tree_index)
+    boot_idx <- sample(1:nrow(train), replace = TRUE)
+    boot_train <- train[boot_idx, ]
+    # need model = TRUE below to fix warning
+    rpart(
+      target ~ .,
+      data = boot_train,
+      method = "class",
+      control = rpart.control(cp = 0.015),
+      model = TRUE
+    )
+  })
+
+  # Dynamic Card Header for the tree
+  output$rf_tree_header_ui <- renderUI({
+    card_header(tags$strong(paste(
+      "Selected individual tree (Tree #",
+      input$rf_tree_index,
+      ")"
+    )))
+  })
+
+  output$rf_comparative_metrics_ui <- renderUI({
+    prob_forest <- get_prob1_safe(predict(rf_model(), test, type = "prob"))
+    m_forest <- compute_metrics(
+      test$target,
+      ifelse(prob_forest >= 0.5, "1", "0"),
+      prob_forest
+    )
+
+    prob_tree <- get_prob1_safe(predict(
+      rf_individual_tree(),
+      test,
+      type = "prob"
+    ))
+    m_tree <- compute_metrics(
+      test$target,
+      ifelse(prob_tree >= 0.5, "1", "0"),
+      prob_tree
+    )
+
+    layout_column_wrap(
+      width = 1 / 3,
+      render_delta_ui(
+        "Forest Accuracy",
+        m_forest$acc,
+        m_tree$acc,
+        "success"
+      ),
+      render_delta_ui(
+        "Forest Sensitivity (Caught Heart Disease)",
+        m_forest$sens,
+        m_tree$sens,
+        "danger"
+      ),
+      render_delta_ui(
+        "Forest Specificity (Cleared Healthy)",
+        m_forest$spec,
+        m_tree$spec,
+        value_box_theme(bg = "#4A90E2", fg = "white")
+      )
+    )
+  })
+
+  output$plot_rf_individual_tree <- renderPlot({
+    m <- rf_individual_tree()
+    box_colors <- ifelse(m$frame$yval == 1, "#c3436a", "#4A90E2")
+    # Bugfix
+    # removes main = ...
+    # adds roundint = FALSE
+    rpart.plot(
+      m,
+      type = 2,
+      extra = 104,
+      fallen.leaves = TRUE,
+      main = "",
+      box.col = box_colors,
+      roundint = FALSE
+    )
+  })
+
+  output$plot_rf_imp <- renderPlot({
+    # explicit call to randomForest::importance to avoid package conflicts
+    imp_df <- as.data.frame(randomForest::importance(rf_model()))
+    imp_df$Feature <- rownames(imp_df)
+    imp_df <- imp_df[order(imp_df$MeanDecreaseGini, decreasing = TRUE), ]
+    ggplot(
+      imp_df,
+      aes(x = reorder(Feature, MeanDecreaseGini), y = MeanDecreaseGini)
+    ) +
+      geom_col(fill = "#2c3e50") +
+      coord_flip() +
+      labs(x = "", y = "Importance (mean decrease gini)") +
+      theme_minimal()
+  })
+
+  # --- XGBoost Logic ---
+
+  # FIXED: Explicitly use set_engine to prevent param leakage warnings
+  build_xgb_model <- function(tree_depth = 3, learn_rate = 0.3, trees = 10) {
+    xgb.model <- boost_tree(
+      mode = 'classification',
+      trees = trees,
+      tree_depth = tree_depth,
+      learn_rate = learn_rate
+    ) |>
+      set_engine('xgboost')
+
+    xgb.wf <- workflow() |> add_recipe(heart.recipe) |> add_model(xgb.model)
+    xgb.wf |> fit(train)
+  }
+
+  xgb.fit <- reactiveVal(build_xgb_model())
+  xgb.fit.obj <- reactive({
+    extract_fit_engine(xgb.fit())
+  })
+
+  # # DYNAMICALLY UPDATE SLIDER MAX WHEN BOOSTING ROUNDS CHANGE
+  # observeEvent(input$xgb_num_boost_round, {
+  #   updateSliderInput(
+  #     session,
+  #     "xgb_tree_index",
+  #     max = input$xgb_num_boost_round
+  #   )
+  # })
+
+  observeEvent(input$btn_train_xgb, {
+    tryCatch(
+      {
+        xgb.fit(build_xgb_model(
+          tree_depth = input$xgb_max_depth,
+          learn_rate = input$xgb_eta,
+          trees = input$xgb_num_boost_round
+        ))
+      },
+      error = function(e) {
+        showNotification(
+          paste("Could not train XGBoost model:", e$message),
+          type = "error"
+        )
+      }
+    )
+
+    # DYNAMICALLY UPDATE SLIDER MAX WHEN BOOSTING ROUNDS CHANGE
+    updateSliderInput(
+      session,
+      "xgb_tree_index",
+      max = input$xgb_num_boost_round
+    )
+  })
+
+  output$header_plot_xgb_tree <- renderUI({
+    numBoost <- xgb.get.num.boosted.rounds(xgb.fit.obj())
+    idx <- as.integer(min(input$xgb_tree_index, numBoost))
+    s <- paste0("Displaying XGBoost Tree ", idx, " out of ", numBoost)
+    tags$strong(s)
+  })
+
+  output$plot_xgb_tree <- renderGrViz({
+    req(xgb.fit.obj())
+    numBoost <- xgb.get.num.boosted.rounds(xgb.fit.obj())
+    # 1-indexed trees in XGBoost, capped at max rounds
+    idx <- as.integer(min(input$xgb_tree_index, numBoost))
+
+    xgboost::xgb.plot.tree(
+      model = xgb.fit.obj(),
+      tree_idx = idx,
+      with_stats = FALSE
+    )
+  })
+
+  xgb_perf_obj <- reactive({
+    prob_mat <- predict(xgb.fit(), new_data = test, type = 'prob')
+    prob1 <- unlist(prob_mat[, 2])
+    pred_class <- ifelse(prob1 >= input$xg_threshold, "1", "0")
     compute_metrics(test$target, pred_class, prob1)
   })
 
-  output$tree_perf_ui <- renderUI({
-    m <- tree_perf_obj()
+  output$xgb_perf_ui <- renderUI({
+    m <- xgb_perf_obj()
     metrics_tbl <- tags$table(
       class = "table table-sm table-striped align-middle",
       tags$tbody(
         tags$tr(
           tags$th("Threshold"),
-          tags$td(fmt(input$threshold, digits = 2))
+          tags$td(fmt(input$xg_threshold, digits = 2))
         ),
         tags$tr(tags$th("Accuracy"), tags$td(fmt(m$acc))),
         tags$tr(tags$th("Sensitivity"), tags$td(fmt(m$sens))),
@@ -931,427 +1692,26 @@ server <- function(input, output, session) {
       metrics_tbl,
       tags$div(
         style = "margin-top: 8px;",
-        plotOutput("plot_tree_cm_heat", height = 280)
+        plotOutput("plot_xgb_cm_heat", height = 200)
       )
     )
   })
 
-  output$plot_tree_cm_heat <- renderPlot({
-    m <- tree_perf_obj()
-    plot_cm_heatmap(m$cm, "Decision Tree — Confusion Matrix Heatmap")
-  })
-
-  output$plot_tree_roc <- renderPlot({
-    m <- tree_perf_obj()
-    safe_plot_roc(m$roc, m$auc, "Decision Tree ROC")
-  })
-
-  # ---- Patient row builder
-  build_patient_row <- function() {
-    one <- train[1, , drop = FALSE]
-    one$age <- as.numeric(input$p_age)
-    one$sex <- factor(input$p_sex, levels = levels(train$sex))
-    one$cp <- factor(input$p_cp, levels = levels(train$cp))
-    one$trestbps <- as.numeric(input$p_trestbps)
-    one$chol <- as.numeric(input$p_chol)
-    one$fbs <- factor(input$p_fbs, levels = levels(train$fbs))
-    one$restecg <- factor(input$p_restecg, levels = levels(train$restecg))
-    one$thalach <- as.numeric(input$p_thalach)
-    one$exang <- factor(input$p_exang, levels = levels(train$exang))
-    one$oldpeak <- as.numeric(input$p_oldpeak)
-    one$slope <- factor(input$p_slope, levels = levels(train$slope))
-    one$ca <- factor(input$p_ca, levels = levels(train$ca))
-    one$thal <- factor(input$p_thal, levels = levels(train$thal))
-    one
-  }
-
-  # ---- Walk a patient (user inputs)
-  patient_result <- reactiveVal(NULL)
-
-  observeEvent(input$btn_explain, {
-    tryCatch(
-      {
-        one <- build_patient_row()
-
-        m_use <- tree_model()
-        used_explainer <- FALSE
-        if (!tree_has_splits(m_use)) {
-          m_use <- explainer_tree_model()
-          used_explainer <- TRUE
-        }
-
-        prob_mat <- predict(m_use, one, type = "prob")
-        prob1 <- get_prob1_safe(prob_mat)
-        pred_class <- ifelse(prob1 >= input$threshold, "1", "0")
-
-        patient_result(list(
-          one = one,
-          model_used = m_use,
-          prob1 = as.numeric(prob1),
-          pred_class = as.character(pred_class),
-          used_explainer = used_explainer
-        ))
-      },
-      error = function(e) {
-        showNotification(
-          paste("Could not compute patient explanation:", e$message),
-          type = "error",
-          duration = 8
-        )
-        patient_result(NULL)
-      }
-    )
-  })
-
-  output$patient_summary_ui <- renderUI({
-    res <- patient_result()
-    if (is.null(res)) {
-      return(tags$p(
-        "Enter details and click ",
-        tags$b("Explain my path"),
-        " to generate the prediction and the highlighted decision tree path."
-      ))
-    }
-
-    label <- if (is.na(res$prob1)) {
-      "Not available"
-    } else if (res$pred_class == "1") {
-      "Higher risk (class=1)"
-    } else {
-      "Lower risk (class=0)"
-    }
-
-    note <- if (isTRUE(res$used_explainer)) {
-      tags$div(
-        class = "alert alert-warning p-2 mt-2",
-        tags$strong("Note: "),
-        "Your slider-selected tree was too simple (no splits). An explainer tree was used so the patient path can be shown."
-      )
-    } else {
-      NULL
-    }
-
-    tags$div(
-      tags$table(
-        class = "table table-sm table-striped align-middle",
-        tags$tbody(
-          tags$tr(
-            tags$th("Probability of disease (class=1)"),
-            tags$td(fmt(res$prob1))
-          ),
-          tags$tr(
-            tags$th("Threshold used"),
-            tags$td(fmt(input$threshold, digits = 2))
-          ),
-          tags$tr(tags$th("Predicted class"), tags$td(label))
-        )
-      ),
-      note
-    )
-  })
-
-  output$plot_patient_tree <- renderPlot({
-    res <- patient_result()
-    if (is.null(res)) {
-      plot.new()
-      text(
-        0.5,
-        0.5,
-        "No patient run yet.\nClick 'Explain my path' to show the tree with your path highlighted.",
-        cex = 1
-      )
-      return(invisible())
-    }
-
-    plot_patient_tree_highlight(
-      model = res$model_used,
-      one_row = res$one,
-      main_title = "Patient-specific Decision Tree (highlighted path)"
-    )
-  })
-
-  # ---- Case Study Background (example patient = first row of train)
-  patient_result_bg <- reactiveVal(NULL)
-
-  observeEvent(input$btn_explain_bg, {
-    tryCatch(
-      {
-        one <- train[1, , drop = FALSE]
-
-        m_use <- tree_model()
-        used_explainer <- FALSE
-        if (!tree_has_splits(m_use)) {
-          m_use <- explainer_tree_model()
-          used_explainer <- TRUE
-        }
-
-        prob_mat <- predict(m_use, one, type = "prob")
-        prob1 <- get_prob1_safe(prob_mat)
-        pred_class <- ifelse(prob1 >= input$threshold, "1", "0")
-
-        patient_result_bg(list(
-          one = one,
-          model_used = m_use,
-          prob1 = as.numeric(prob1),
-          pred_class = as.character(pred_class),
-          used_explainer = used_explainer
-        ))
-      },
-      error = function(e) {
-        showNotification(
-          paste("Could not compute case study explanation:", e$message),
-          type = "error",
-          duration = 8
-        )
-        patient_result_bg(NULL)
-      }
-    )
-  })
-
-  output$patient_summary_ui_bg <- renderUI({
-    res <- patient_result_bg()
-    if (is.null(res)) {
-      return(tags$p(
-        "Click ",
-        tags$b("Explain my path"),
-        " to generate the example patient prediction and highlighted path."
-      ))
-    }
-
-    label <- if (is.na(res$prob1)) {
-      "Not available"
-    } else if (res$pred_class == "1") {
-      "Higher risk (class=1)"
-    } else {
-      "Lower risk (class=0)"
-    }
-
-    note <- if (isTRUE(res$used_explainer)) {
-      tags$div(
-        class = "alert alert-warning p-2 mt-2",
-        tags$strong("Note: "),
-        "Your slider-selected tree was too simple (no splits). An explainer tree was used so the path can be shown."
-      )
-    } else {
-      NULL
-    }
-
-    tags$div(
-      tags$table(
-        class = "table table-sm table-striped align-middle",
-        tags$tbody(
-          tags$tr(
-            tags$th("Probability of disease (class=1)"),
-            tags$td(fmt(res$prob1))
-          ),
-          tags$tr(
-            tags$th("Threshold used"),
-            tags$td(fmt(input$threshold, digits = 2))
-          ),
-          tags$tr(tags$th("Predicted class"), tags$td(label))
-        )
-      ),
-      note
-    )
-  })
-
-  output$plot_patient_tree_bg <- renderPlot({
-    res <- patient_result_bg()
-    if (is.null(res)) {
-      plot.new()
-      text(
-        0.5,
-        0.5,
-        "Click 'Explain my path' to generate the example patient tree path.",
-        cex = 1
-      )
-      return(invisible())
-    }
-
-    plot_patient_tree_highlight(
-      model = res$model_used,
-      one_row = res$one,
-      main_title = "Example Patient — Decision Tree (highlighted path)"
-    )
-  })
-
-  # ---- Random forest
-  rf_model <- reactive({
-    randomForest(
-      target ~ .,
-      data = train,
-      ntree = input$rf_ntree,
-      mtry = input$rf_mtry,
-      importance = TRUE
-    )
-  })
-
-  rf_perf_obj <- reactive({
-    prob_mat <- predict(rf_model(), test, type = "prob")
-    prob1 <- get_prob1_safe(prob_mat)
-    pred_class <- ifelse(prob1 >= input$threshold, "1", "0")
-    pred_class <- factor(pred_class, levels = c("0", "1"))
-    compute_metrics(test$target, pred_class, prob1)
-  })
-
-  output$plot_rf_imp <- renderPlot({
-    imp <- importance(rf_model())
-    if (is.null(dim(imp))) {
-      plot.new()
-      text(0.5, 0.5, "Importance not available.")
-      return(invisible())
-    }
-
-    imp_df <- data.frame(
-      Feature = rownames(imp),
-      MeanDecreaseGini = imp[, "MeanDecreaseGini"],
-      stringsAsFactors = FALSE
-    )
-    imp_df <- imp_df[order(imp_df$MeanDecreaseGini, decreasing = TRUE), ]
-    imp_df <- head(imp_df, 10)
-
-    ggplot(
-      imp_df,
-      aes(x = reorder(Feature, MeanDecreaseGini), y = MeanDecreaseGini)
-    ) +
-      geom_col() +
-      coord_flip() +
-      labs(
-        x = "",
-        y = "Mean Decrease Gini",
-        title = "Top 10 predictors (Random Forest)"
-      ) +
-      theme_minimal(base_size = 13)
-  })
-
-  output$rf_perf_ui <- renderUI({
-    m <- rf_perf_obj()
-    oob <- tryCatch(tail(rf_model()$err.rate, 1), error = function(e) NULL)
-
-    metrics_tbl <- tags$table(
-      class = "table table-sm table-striped align-middle",
-      tags$tbody(
-        tags$tr(
-          tags$th("Threshold"),
-          tags$td(fmt(input$threshold, digits = 2))
-        ),
-        tags$tr(tags$th("Accuracy"), tags$td(fmt(m$acc))),
-        tags$tr(tags$th("Sensitivity"), tags$td(fmt(m$sens))),
-        tags$tr(tags$th("Specificity"), tags$td(fmt(m$spec))),
-        tags$tr(tags$th("AUC"), tags$td(fmt(m$auc))),
-        tags$tr(
-          tags$th("OOB error (training RF)"),
-          tags$td(
-            if (is.null(oob)) {
-              "NA"
-            } else {
-              fmt(as.numeric(oob[1, "OOB"]), digits = 3)
-            }
-          )
-        )
-      )
-    )
-
-    tags$div(
-      metrics_tbl,
-      tags$div(
-        style = "margin-top: 8px;",
-        plotOutput("plot_rf_cm_heat", height = 280)
-      )
-    )
-  })
-
-  output$plot_rf_cm_heat <- renderPlot({
-    m <- rf_perf_obj()
-    plot_cm_heatmap(m$cm, "Random Forest — Confusion Matrix Heatmap")
-  })
-
-  output$plot_rf_roc <- renderPlot({
-    m <- rf_perf_obj()
-    safe_plot_roc(m$roc, m$auc, "Random Forest ROC")
-  })
-
-  # ---- XG Boosted (rpart-based as per your original section)
-  build_xgb_model <- function(
-    tree_depth = 3,
-    learn_rate = 1,
-    trees = 3
-  ) {
-    xgb.model <- boost_tree(
-      mode = 'classification',
-      engine = 'xgboost',
-      tree_depth = tree_depth,
-      learn_rate = learn_rate,
-      trees = trees,
-    )
-
-    xgb.wf <- workflow() |>
-      add_recipe(heart.recipe) |>
-      add_model(xgb.model)
-
-    xgb.wf |> fit(train)
-  }
-
-  xgb.fit <- reactiveVal(build_xgb_model())
-
-  observeEvent(input$btn_train_xgb, {
-    tryCatch(
-      {
-        xgb.fit(
-          build_xgb_model(
-            tree_depth = input$xgb_max_depth,
-            learn_rate = input$xgb_eta,
-            trees = input$xgb_num_boost_round
-          )
-        )
-      },
-      error = function(e) {
-        showNotification(
-          paste("Could not train XGBoost model:", e$message),
-          type = "error",
-          duration = 8
-        )
-        xgb.fit(NULL)
-      }
-    )
-  })
-
-  output$plot_xgb_tree <- renderGrViz({
-    xgb.fit.obj <- extract_fit_engine(xgb.fit())
-
-    xgb.plot.tree(
-      xgb.fit.obj,
-      tree_idx = input$xgb_tree_index,
-      with_stats = TRUE
-    )
-  })
-
-  xg_perf_obj <- reactive({
-    # prob_mat <- predict(xg_tree_model(), test, type = "prob")
-    # prob1 <- get_prob1_safe(prob_mat)
-    # pred_class <- ifelse(prob1 >= input$xg_threshold, "1", "0")
-    # pred_class <- factor(pred_class, levels = c("0", "1"))
-    # compute_metrics(test$target, pred_class, prob1)
-    NULL
-  })
-
-  output$xg_tree_perf <- renderPrint({
-    # m <- xg_perf_obj()
-    # cat("Threshold:", input$xg_threshold, "\n\n")
-    # cat("Confusion Matrix:\n\n")
-    # print(m$cm)
-    # cat("\nAccuracy:", fmt(m$acc),
-    #     "\nSensitivity:", fmt(m$sens),
-    #     "\nSpecificity:", fmt(m$spec),
-    #     "\nAUC:", fmt(m$auc), "\n")
-    print(xgb.fit())
+  output$plot_xgb_cm_heat <- renderPlot({
+    plot_cm_heatmap(xgb_perf_obj()$cm, "XGBoost — Confusion Matrix")
   })
 
   output$plot_xg_tree_roc <- renderPlot({
-    # m <- xg_perf_obj()
-    # safe_plot_roc(m$roc, m$auc, "XG Boosted ROC")
-    return(invisible())
+    m <- xgb_perf_obj()
+    safe_plot_roc(m$roc, m$auc, "XGBoost ROC")
+  })
+
+  output$xgb_feature_imp <- renderPlot({
+    Xtrain <- heart.recipe |> prep() |> bake(train) |> select(-target)
+    shp <- shapviz(xgb.fit.obj(), X_pred = data.matrix(Xtrain), X = Xtrain)
+    sv_importance(shp, kind = 'both', fill = '#4A90E2')
   })
 }
 
+# Run app ====
 shinyApp(ui, server)

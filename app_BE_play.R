@@ -648,7 +648,12 @@ ui <- page_navbar(
           tags$p(
             style = "font-size: 0.9em; color: #555; text-align: center; margin-top: 10px;",
             tags$i(
-              "Note: This tree was built using the Training Data, but the accuracy scores above are calculated using the unseen Testing Data to see how well the tree works on new data."
+              "Note: This tree was built using the Training Data, but the accuracy scores above are calculated using the unseen Testing Data to see how well the tree works on new data. To see a full patient profile calculator: ",
+              tags$a(
+                href = "https://3enji.shinyapps.io/smm636-a01-tree-based-methods-standalone-tab4/",
+                target = "_blank",
+                "Click Here"
+              )
             )
           )
         )
