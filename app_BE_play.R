@@ -921,7 +921,7 @@ ui <- page_navbar(
       card(
         h3("Which model is the right choice?"),
         p(
-          "In data analytics, there is rarely a single 'perfect' algorithm. As we have demonstrated with this clinical dataset, choosing a model requires balancing ",
+          "In data analytics, there is rarely a single 'perfect' algorithm. Choosing which tree-based approach involves balancing ",
           tags$b("accuracy"),
           " with ",
           tags$b("interpretability."),
@@ -930,7 +930,7 @@ ui <- page_navbar(
         tags$hr(),
 
         h5("1. Decision Trees"),
-        p(tags$b("The clear communicator.")),
+        # p(tags$b("The clear communicator.")),
         tags$ul(
           tags$li(
             "Highly transparent and easy to explain to stakeholders or regulators."
@@ -948,7 +948,7 @@ ui <- page_navbar(
         # tags$hr(),
 
         h5("2. Random Forests"),
-        p(tags$b("The stable workhorse.")),
+        # p(tags$b("The stable workhorse.")),
         tags$ul(
           tags$li("Excellent out-of-the-box predictive accuracy."),
           tags$li(
@@ -966,48 +966,48 @@ ui <- page_navbar(
         # tags$hr(),
 
         h5("3. XGBoost"),
-        p(tags$b("The precision instrument.")),
+        # p(tags$b("The precision instrument.")),
         tags$ul(
           tags$li(
             "Often provides state-of-the-art, best-in-class predictive accuracy."
           ),
           tags$li(
-            "Learns sequentially from its own mistakes to optimize performance."
+            "Learns sequentially from its own mistakes to optimise performance."
           ),
           tags$li(
             tags$span(
               style = "color: #e74c3c; font-weight: bold;",
               "Limitation: "
             ),
-            "Requires careful mathematical tuning to prevent it from memorizing the noise in the data. Also a 'black box'."
+            "Requires careful mathematical tuning to prevent it from memorising the noise in the data. Also a 'black box'."
           )
         )
       ),
 
-      # RIGHT SIDE: The Final Pitch
+      # rhs: final pitch
       card(
         h5("Our Approach"),
         tags$div(
           style = "text-align: left; padding: 5px;",
 
           tags$p(
-            "As actuaries and data professionals, we do not just apply complex algorithms blindly. We partner with you to understand your specific business needs:"
+            "As actuaries and data professionals, we are passionate about building highly accurate models and explaining them in real, understandable terms. We don't just apply complex algorithms blindly, we partner with you to ensure our solutions align with your specific business needs:"
           ),
 
           tags$ul(
             tags$li(
               "If your priority is ",
               tags$b("regulatory compliance and transparency"),
-              " (e.g., explaining exactly why a policy was priced a certain way), we will leverage optimized ",
+              " (e.g., explaining exactly why a policy was priced a certain way), optimised ",
               tags$b("Decision Trees"),
-              "."
+              " may be more effective."
             ),
             tags$li(
               "If your priority is ",
               tags$b("pure predictive power"),
-              " (e.g., catching as many fraudulent claims as possible), we will deploy highly tuned ",
-              tags$b("Ensembles like XGBoost"),
-              "."
+              " (e.g., catching as many fraudulent claims as possible), ensemble methods, such as ",
+              tags$b("XGBoost or Random Forest"),
+              " may be more suitable."
             )
           ),
 
@@ -1017,7 +1017,9 @@ ui <- page_navbar(
             style = "background-color: #f8f9fa; padding: 15px; border-left: 4px solid #8A1C3D; border-radius: 4px;",
             tags$p(
               style = "font-weight: bold; font-size: 1.1em; color: #333; margin-bottom: 0;",
-              "We balance cutting-edge accuracy with transparent, interpretable models."
+              HTML(
+                "At ABBA<sup>*</sup> Actuarial Consulting we specialise in making complex models easy and effective for you and your business."
+              )
             )
           ),
 
@@ -1027,6 +1029,16 @@ ui <- page_navbar(
           tags$p(
             style = "font-size: 1.0em; color: #555; text-align: center;",
             tags$i("Thank you for exploring this interactive case study.")
+          ),
+
+          tags$hr(
+            style = "margin-top: 30px; margin-bottom: 10px; border-top: 1px dashed #ccc;"
+          ),
+          tags$p(
+            style = "font-size: 0.8em; color: #888; text-align: left; margin-bottom: 0;",
+            HTML(
+              "<sup>*</sup> Abudlmatin, Ben, Basmah, & Ardi Actuarial Consulting <i>(trademark pending)</i>."
+            )
           )
         )
       )
@@ -1626,7 +1638,7 @@ server <- function(input, output, session) {
 
     xgboost::xgb.plot.tree(
       model = xgb.fit.obj(),
-      tree_idx = idx, 
+      tree_idx = idx,
       with_stats = FALSE
     )
   })
