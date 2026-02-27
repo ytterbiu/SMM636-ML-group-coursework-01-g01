@@ -856,16 +856,15 @@ ui <- page_navbar(
               class = "btn-primary"
             ),
             hr(),
-            ### BE commented out*** ----
-            # sliderInput(
-            #   "xgb_tree_index",
-            #   "Tree index to display:",
-            #   min = 1,
-            #   max = 20,
-            #   value = 1,
-            #   step = 1
-            # ),
-            # hr(),
+            sliderInput(
+              "xgb_tree_index",
+              "Tree index to display:",
+              min = 1,
+              max = 20,
+              value = 1,
+              step = 1
+            ),
+            hr(),
             h5("Decision rule threshold"),
             sliderInput(
               "xg_threshold",
@@ -1607,21 +1606,15 @@ server <- function(input, output, session) {
 
   output$plot_xgb_tree <- renderGrViz({
     req(xgb.fit.obj())
-    ### BE commented out ----
-    # req(input$xgb_tree_index)
 
-    # 0-indexed trees in XGBoost, capped at max rounds
-    # idx <- as.integer(min(input$xgb_tree_index, input$xgb_num_boost_round)) - 1L
+    # 1-indexed trees in XGBoost, capped at max rounds
+    idx <- as.integer(min(input$xgb_tree_index, input$xgb_num_boost_round))
 
-    suppressWarnings({
-      # hoping render = FALSE will force compatability with Shiny
-      xgboost::xgb.plot.tree(
-        model = xgb.fit.obj(),
-        # trees = idx, # replaced with below for now
-        trees = 0L,
-        render = FALSE
-      )
-    })
+    xgboost::xgb.plot.tree(
+      model = xgb.fit.obj(),
+      tree_idx = idx, 
+      with_stats = FALSE
+    )
   })
 
   xgb_perf_obj <- reactive({
