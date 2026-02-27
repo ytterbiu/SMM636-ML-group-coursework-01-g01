@@ -573,7 +573,12 @@ ui <- page_navbar(
           selected = "1"
         ),
 
-        actionButton("btn_predict", "Predict My Path", class = "btn-primary"),
+        actionButton(
+          "btn_predict",
+          "Predict Patient Path & Condition",
+          class = "btn-primary"
+        ),
+        uiOutput("predicted_condition_ui"),
 
         tags$hr(),
 
@@ -926,6 +931,7 @@ server <- function(input, output, session) {
 
   # handle the patient prediction button click
   patient_leaf <- reactiveVal(NULL)
+  patient_pred <- reactiveVal(NULL)
 
   observeEvent(input$btn_predict, {
     # 1. take the first row of training data to get the exact data structure & factor levels
@@ -953,6 +959,9 @@ server <- function(input, output, session) {
 
     # 5. get the matrix prediction and match its counts to the tree frame
     m <- full_tree_model()
+    # predict class
+    pred_class <- as.character(predict(m, two_rows, type = "class")[1])
+    patient_pred(pred_class)
     pred_mat <- predict(m, two_rows, type = "matrix")
 
     # columns 2 and 3 of the matrix hold the exact counts of healthy/sick in that specific leaf
@@ -969,9 +978,34 @@ server <- function(input, output, session) {
     }
   })
 
+  # predicted condition output
+  output$predicted_condition_ui <- renderUI({
+    p <- patient_pred()
+    if (is.null(p)) {
+      return(NULL)
+    }
+
+    label <- if (p == "1") "Heart disease" else "No heart disease"
+    col <- if (p == "1") "#c3436a" else "#4A90E2"
+
+    tags$div(
+      style = "margin-top:12px;",
+      tags$div(style = "font-size:0.95rem; color:#666;", "Predicted condition"),
+      tags$div(
+        style = sprintf(
+          "margin-top:6px; display:inline-block; padding:8px 12px; border-radius:999px;
+       font-weight:700; font-size:1.1rem; color:white; background:%s;",
+          col
+        ),
+        label
+      )
+    )
+  })
+
   # if the tree structure changes (e.g., user changes cp), reset the patient highlight
   observeEvent(full_tree_model(), {
     patient_leaf(NULL)
+    patient_pred(NULL)
   })
 
   # render the full tree, highlighting the path if the button was clicked
