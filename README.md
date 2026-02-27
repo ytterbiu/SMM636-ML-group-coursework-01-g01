@@ -7,8 +7,8 @@ Learning.
 
 > [!NOTE]
 > Live applications are available via:
-> [Basic application](https://3enji.shinyapps.io/smm636-a01-tree-based-methods/)
-> [More specialised decision tree](https://3enji.shinyapps.io/smm636-a01-tree-based-methods-standalone-tab4/)
+> - [Basic application](https://3enji.shinyapps.io/smm636-a01-tree-based-methods/)
+> - [More specialised decision tree](https://3enji.shinyapps.io/smm636-a01-tree-based-methods-standalone-tab4/)
 
 ## Models Used
 
@@ -63,6 +63,7 @@ install.packages(c(
   "shapviz"
 ))
 ```
+
 
 
 
