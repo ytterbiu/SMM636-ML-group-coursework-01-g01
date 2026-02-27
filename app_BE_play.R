@@ -15,6 +15,7 @@ library(pROC)
 library(tidymodels)
 library(xgboost)
 library(DiagrammeR)
+library(shapviz)
 
 # ============================================================================ #
 # Data: find, load, clean ====
@@ -165,6 +166,31 @@ info_icon <- function(text) {
     title = text,
     "i"
   )
+}
+safe_plot_roc <- function(roc_obj, auc_val, title_text) {
+  if (is.null(roc_obj) || is.na(auc_val)) {
+    plot.new()
+    text(0.5, 0.5, "ROC not available.", cex = 1)
+    return(invisible())
+  }
+
+  # Use ggroc to plot False Positive Rate (0 to 1) vs True Positive Rate (0 to 1)
+  g <- pROC::ggroc(roc_obj, legacy.axes = TRUE) +
+    geom_abline(
+      slope = 1,
+      intercept = 0,
+      linetype = "dashed",
+      color = "gray50"
+    ) +
+    theme_minimal(base_size = 14) +
+    labs(
+      title = paste0(title_text, " (AUC = ", fmt(auc_val), ")"),
+      x = "False Positive Rate (1 - Specificity)",
+      y = "True Positive Rate (Sensitivity)"
+    ) +
+    coord_equal(xlim = c(0, 1), ylim = c(0, 1)) # Perfectly squares and locks the axes
+
+  return(g)
 }
 
 # ============================================================================ #
@@ -440,7 +466,7 @@ ui <- page_navbar(
     # top instructions and dynamic value boxes
     layout_sidebar(
       sidebar = sidebar(
-        h5("Growing a tree"),
+        h5("Growing a Tree"),
         helpText(
           "Move the slider to see how the algorithm divides the data step-by-step, learning new rules with each layer.",
           br(),
@@ -616,7 +642,7 @@ ui <- page_navbar(
         width = 1, # single column for a nice wide tree
         card(
           class = "shadow-sm",
-          card_header(tags$strong("The Full Clinical Decision Tree")),
+          card_header(tags$strong("The full clinical decision tree")),
           plotOutput("plot_full_tree", height = 500),
 
           tags$p(
@@ -631,23 +657,246 @@ ui <- page_navbar(
   ),
 
   # ========================================================================== #
-  ## Tab 5: Advanced ensembles ----
+  # ========================================================================== #
+  ## Tab 5: Ensembles ----
   nav_panel(
-    title = "5. Ensembles (RF & XGBoost)",
+    title = "5. Ensembles",
     value = "tab5",
+
     navset_card_underline(
+      ### subtab 1 ----
+      # --- Subtab 1: RF Explanation ---
       nav_panel(
-        "Random Forest",
+        "1. What is a Random Forest?",
         layout_column_wrap(
           width = 1 / 2,
-          plotOutput("plot_rf_imp"),
-          plotOutput("plot_rf_cm_heat")
+          card(
+            h4("The wisdom of crowds"),
+            p(
+              "A Decision Tree is great, but it has a flaw - it can easily over-memorise the training data (overfitting) and become unstable. If you change the data slightly, the tree changes completely."
+            ),
+            p(
+              "A ",
+              tags$b("Random Forest"),
+              " solves this by building hundreds of different decision trees. To make sure the trees aren't all identical, the algorithm uses two tricks:"
+            ),
+            tags$ul(
+              tags$li(
+                tags$b("Bootstrapping: "),
+                "Each tree is trained on a random, slightly different subset of the patients."
+              ),
+              tags$li(
+                tags$b("Feature Sampling: "),
+                "At each split, the tree is only allowed to look at a random subset of the clinical variables."
+              )
+            ),
+            p(
+              "When a new patient arrives, all 500 trees 'vote' on the diagnosis. The majority wins. This approach improves accuracy and stability."
+            )
+          ),
+          card(
+            h5("Random Forest visualised"),
+            tags$div(
+              style = "text-align: center; padding: 20px;",
+              tags$p(tags$i(
+                "Note: Save a graphic as 'rf_intro_graphic.png' inside the 'www' folder."
+              )),
+              tags$img(
+                src = "rf_intro_graphic.png",
+                style = "max-width: 100%; max-height: 350px; border: 1px dashed #ccc;"
+              )
+            )
+          )
         )
       ),
+
+      ### subtab 2 ----
+      # --- Subtab 2: RF Implementation ---
       nav_panel(
-        "XGBoost",
-        p("Boosted trees build sequentially, learning from previous mistakes."),
-        grVizOutput("plot_xgb_tree")
+        "2. Random Forest in Action",
+
+        layout_sidebar(
+          sidebar = sidebar(
+            h5("Forest Controls"),
+            sliderInput(
+              "rf_ntree",
+              "Number of trees in forest:",
+              min = 50,
+              max = 500,
+              value = 200,
+              step = 50
+            ),
+            hr(),
+            h5("Inspect Individual Trees"),
+            helpText(
+              "Cycle through the simulated trees that make up the forest to see how different they are from each other."
+            ),
+            sliderInput(
+              "rf_tree_index",
+              "Tree Index to View:",
+              min = 1,
+              max = 20,
+              value = 1,
+              step = 1
+            )
+          ),
+
+          # Top row: Comparative stats (Forest vs individual selected tree)
+          uiOutput("rf_comparative_metrics_ui"),
+
+          layout_column_wrap(
+            width = 1 / 2,
+            card(
+              class = "shadow-sm",
+              uiOutput("rf_tree_header_ui"), # (⌐■_■)
+              plotOutput("plot_rf_individual_tree", height = 400)
+            ),
+            card(
+              class = "shadow-sm",
+              card_header(tags$strong("Overall Forest variable importance")),
+              plotOutput("plot_rf_imp", height = 400),
+              p(
+                class = "text-muted",
+                style = "margin: 0.5rem 1rem 0.75rem 1rem; font-size: 0.9rem; line-height: 1.25;",
+                "Because drawing hundreds of trees is hard to read, we summarise them with a bar chart. Variables nearer the top carried the most weight in the model’s decisions."
+              )
+            )
+          )
+        )
+      ),
+
+      ### subtab 3 ----
+      # --- Subtab 3: XGBoost Explanation ---
+      nav_panel(
+        "3. What is XGBoost?",
+        layout_column_wrap(
+          width = 1 / 2,
+          card(
+            h4("Learning from mistakes"),
+            p(
+              "While a Random Forest builds hundreds of trees independently at the same time, ",
+              tags$b("Boosted Trees (XGBoost)"),
+              " build trees sequentially - one after another."
+            ),
+            p(
+              "Each new tree looks specifically at the patients that the previous trees misclassified, and tries to correct those specific mistakes. This is similar to a student taking a practice test, seeing what they got wrong, and studying only those topics for the next test."
+            ),
+            tags$ul(
+              tags$li(
+                tags$b("Learning Rate: "),
+                "Controls how aggressive the corrections are. A smaller rate means it learns slower but avoids over-correcting."
+              ),
+              tags$li(
+                tags$b("Max Depth: "),
+                "Boosted trees are usually kept very shallow (called 'stumps') so they don't overfit."
+              )
+            ),
+            p(
+              "XGBoost is often considered the most powerful algorithm for tabular real-world data."
+            )
+          ),
+          card(
+            h5("Boosting visualised"),
+            tags$div(
+              style = "text-align: center; padding: 20px;",
+              tags$p(tags$i(
+                "Note: Save a graphic as 'xgb_intro_graphic.png' inside the 'www' folder."
+              )),
+              tags$img(
+                src = "xgb_intro_graphic.png",
+                style = "max-width: 100%; max-height: 350px; border: 1px dashed #ccc;"
+              )
+            )
+          )
+        )
+      ),
+
+      ### subtab 4 ----
+      # --- Subtab 4: XGBoost Implementation ---
+      nav_panel(
+        "4. XGBoost in Action",
+        layout_sidebar(
+          sidebar = sidebar(
+            h5("XGBoost controls"),
+            sliderInput(
+              "xgb_num_boost_round",
+              "Number of Boosting rounds (Trees):",
+              min = 1,
+              max = 20,
+              value = 10,
+              step = 1
+            ),
+            sliderInput(
+              "xgb_max_depth",
+              "Max Tree Depth:",
+              min = 1,
+              max = 4,
+              value = 3,
+              step = 1
+            ),
+            sliderInput(
+              "xgb_eta",
+              "Learning Rate:",
+              min = 0.05,
+              max = 1,
+              value = 0.3,
+              step = 0.05
+            ),
+            actionButton(
+              "btn_train_xgb",
+              "Train XGBoost",
+              class = "btn-primary"
+            ),
+            hr(),
+            sliderInput(
+              "xgb_tree_index",
+              "Tree index to display:",
+              min = 1,
+              max = 20,
+              value = 1,
+              step = 1
+            ),
+            hr(),
+            h5("Decision rule threshold"),
+            sliderInput(
+              "xg_threshold",
+              "Probability cutoff for class=1",
+              min = 0.05,
+              max = 0.95,
+              value = 0.50,
+              step = 0.05
+            ),
+            helpText(
+              "Lower cutoff = more positives predicted (higher sensitivity)."
+            )
+          ),
+          layout_column_wrap(
+            width = 1 / 2,
+            card(
+              class = "shadow-sm",
+              card_header(tags$strong("Selected XGBoost Tree")),
+              grVizOutput("plot_xgb_tree")
+            ),
+            card(
+              class = "shadow-sm",
+              card_header(tags$strong("XGBoost Performance")),
+              uiOutput("xgb_perf_ui")
+            )
+          ),
+          layout_column_wrap(
+            width = 1 / 2,
+            card(
+              class = "shadow-sm",
+              card_header(tags$strong("Feature Importance")),
+              plotOutput("xgb_feature_imp")
+            ),
+            card(
+              class = "shadow-sm",
+              card_header(tags$strong("ROC Curve")),
+              plotOutput("plot_xg_tree_roc", height = 320)
+            )
+          )
+        )
       )
     )
   ),
@@ -1050,28 +1299,263 @@ server <- function(input, output, session) {
   outputOptions(output, "plot_full_tree", suspendWhenHidden = FALSE)
 
   # ========================================================================== #
-  ## Tab 5: Ensembles ----
+  ## Tab 5: Ensembles server logic ----
+
+  # Helper function to generate the green/red comparison UI
+  render_delta_ui <- function(title_text, forest_val, tree_val, theme_color) {
+    diff <- forest_val - tree_val
+    color <- if (diff > 0) {
+      "#27ae60"
+    } else if (diff < 0) {
+      "#e74c3c"
+    } else {
+      "gray"
+    }
+    arrow <- if (diff > 0) {
+      "▲"
+    } else if (diff < 0) {
+      "▼"
+    } else {
+      "-"
+    }
+
+    value_box(
+      title_text,
+      paste0(round(forest_val * 100, 1), "%"),
+      theme = theme_color,
+      tags$div(
+        style = paste(
+          "color:",
+          color,
+          "; font-size: 0.9rem; font-weight: bold; background: white; padding: 2px 6px; border-radius: 4px; display: inline-block;"
+        ),
+        paste0(
+          arrow,
+          " ",
+          round(abs(diff) * 100, 1),
+          "% vs selected individual tree"
+        )
+      )
+    )
+  }
+
+  # --- RF Logic ---
   rf_model <- reactive({
-    randomForest(target ~ ., data = train, ntree = 100, importance = TRUE)
-  })
-  output$plot_rf_imp <- renderPlot({
-    varImpPlot(rf_model(), main = "Feature Importance")
-  })
-  output$plot_rf_cm_heat <- renderPlot({
-    prob1 <- get_prob1_safe(predict(rf_model(), test, type = "prob"))
-    m <- compute_metrics(test$target, ifelse(prob1 >= 0.5, "1", "0"), prob1)
-    plot_cm_heatmap(m$cm, "RF Confusion Matrix")
+    randomForest(
+      target ~ .,
+      data = train,
+      ntree = input$rf_ntree,
+      importance = TRUE
+    )
   })
 
-  xgb_mod <- boost_tree(
-    mode = 'classification',
-    engine = 'xgboost',
-    trees = 5
-  ) |>
-    fit(target ~ ., data = prep(heart.recipe) |> bake(train))
+  # Simulate an individual tree
+  rf_individual_tree <- reactive({
+    set.seed(input$rf_tree_index)
+    boot_idx <- sample(1:nrow(train), replace = TRUE)
+    boot_train <- train[boot_idx, ]
+    # need model = TRUE below to fix warning
+    rpart(
+      target ~ .,
+      data = boot_train,
+      method = "class",
+      control = rpart.control(cp = 0.015),
+      model = TRUE
+    )
+  })
+
+  # Dynamic Card Header for the tree
+  output$rf_tree_header_ui <- renderUI({
+    card_header(tags$strong(paste(
+      "Selected individual tree (Tree #",
+      input$rf_tree_index,
+      ")"
+    )))
+  })
+
+  output$rf_comparative_metrics_ui <- renderUI({
+    prob_forest <- get_prob1_safe(predict(rf_model(), test, type = "prob"))
+    m_forest <- compute_metrics(
+      test$target,
+      ifelse(prob_forest >= 0.5, "1", "0"),
+      prob_forest
+    )
+
+    prob_tree <- get_prob1_safe(predict(
+      rf_individual_tree(),
+      test,
+      type = "prob"
+    ))
+    m_tree <- compute_metrics(
+      test$target,
+      ifelse(prob_tree >= 0.5, "1", "0"),
+      prob_tree
+    )
+
+    layout_column_wrap(
+      width = 1 / 3,
+      render_delta_ui(
+        "Forest Accuracy",
+        m_forest$acc,
+        m_tree$acc,
+        "success"
+      ),
+      render_delta_ui(
+        "Forest Sensitivity (Caught Heart Disease)",
+        m_forest$sens,
+        m_tree$sens,
+        "danger"
+      ),
+      render_delta_ui(
+        "Forest Specificity (Cleared Healthy)",
+        m_forest$spec,
+        m_tree$spec,
+        value_box_theme(bg = "#4A90E2", fg = "white")
+      )
+    )
+  })
+
+  output$plot_rf_individual_tree <- renderPlot({
+    m <- rf_individual_tree()
+    box_colors <- ifelse(m$frame$yval == 1, "#c3436a", "#4A90E2")
+    # Bugfix
+    # removes main = ...
+    # adds roundint = FALSE
+    rpart.plot(
+      m,
+      type = 2,
+      extra = 104,
+      fallen.leaves = TRUE,
+      main = "",
+      box.col = box_colors,
+      roundint = FALSE
+    )
+  })
+
+  output$plot_rf_imp <- renderPlot({
+    # explicit call to randomForest::importance to avoid package conflicts
+    imp_df <- as.data.frame(randomForest::importance(rf_model()))
+    imp_df$Feature <- rownames(imp_df)
+    imp_df <- imp_df[order(imp_df$MeanDecreaseGini, decreasing = TRUE), ]
+    ggplot(
+      imp_df,
+      aes(x = reorder(Feature, MeanDecreaseGini), y = MeanDecreaseGini)
+    ) +
+      geom_col(fill = "#2c3e50") +
+      coord_flip() +
+      labs(x = "", y = "Importance (mean decrease gini)") +
+      theme_minimal()
+  })
+
+  # --- XGBoost Logic ---
+
+  # FIXED: Explicitly use set_engine to prevent param leakage warnings
+  build_xgb_model <- function(tree_depth = 3, learn_rate = 0.3, trees = 10) {
+    xgb.model <- boost_tree(
+      mode = 'classification',
+      trees = trees,
+      tree_depth = tree_depth,
+      learn_rate = learn_rate
+    ) |>
+      set_engine('xgboost')
+
+    xgb.wf <- workflow() |> add_recipe(heart.recipe) |> add_model(xgb.model)
+    xgb.wf |> fit(train)
+  }
+
+  xgb.fit <- reactiveVal(build_xgb_model())
+  xgb.fit.obj <- reactive({
+    extract_fit_engine(xgb.fit())
+  })
+
+  # DYNAMICALLY UPDATE SLIDER MAX WHEN BOOSTING ROUNDS CHANGE
+  observeEvent(input$xgb_num_boost_round, {
+    updateSliderInput(
+      session,
+      "xgb_tree_index",
+      max = input$xgb_num_boost_round
+    )
+  })
+
+  observeEvent(input$btn_train_xgb, {
+    tryCatch(
+      {
+        xgb.fit(build_xgb_model(
+          tree_depth = input$xgb_max_depth,
+          learn_rate = input$xgb_eta,
+          trees = input$xgb_num_boost_round
+        ))
+      },
+      error = function(e) {
+        showNotification(
+          paste("Could not train XGBoost model:", e$message),
+          type = "error"
+        )
+      }
+    )
+  })
 
   output$plot_xgb_tree <- renderGrViz({
-    xgb.plot.tree(extract_fit_engine(xgb_mod), tree_idx = 1)
+    req(xgb.fit.obj())
+    req(input$xgb_tree_index)
+
+    # 0-indexed trees in XGBoost, capped at max rounds
+    idx <- as.integer(min(input$xgb_tree_index, input$xgb_num_boost_round)) - 1L
+
+    suppressWarnings({
+      # hoping render = FALSE will force compatability with Shiny
+      xgboost::xgb.plot.tree(
+        model = xgb.fit.obj(),
+        trees = idx,
+        render = FALSE
+      )
+    })
+  })
+
+  xgb_perf_obj <- reactive({
+    prob_mat <- predict(xgb.fit(), new_data = test, type = 'prob')
+    prob1 <- unlist(prob_mat[, 2])
+    pred_class <- ifelse(prob1 >= input$xg_threshold, "1", "0")
+    compute_metrics(test$target, pred_class, prob1)
+  })
+
+  output$xgb_perf_ui <- renderUI({
+    m <- xgb_perf_obj()
+    metrics_tbl <- tags$table(
+      class = "table table-sm table-striped align-middle",
+      tags$tbody(
+        tags$tr(
+          tags$th("Threshold"),
+          tags$td(fmt(input$xg_threshold, digits = 2))
+        ),
+        tags$tr(tags$th("Accuracy"), tags$td(fmt(m$acc))),
+        tags$tr(tags$th("Sensitivity"), tags$td(fmt(m$sens))),
+        tags$tr(tags$th("Specificity"), tags$td(fmt(m$spec))),
+        tags$tr(tags$th("AUC"), tags$td(fmt(m$auc)))
+      )
+    )
+    tags$div(
+      metrics_tbl,
+      tags$div(
+        style = "margin-top: 8px;",
+        plotOutput("plot_xgb_cm_heat", height = 200)
+      )
+    )
+  })
+
+  output$plot_xgb_cm_heat <- renderPlot({
+    plot_cm_heatmap(xgb_perf_obj()$cm, "XGBoost — Confusion Matrix")
+  })
+
+  output$plot_xg_tree_roc <- renderPlot({
+    m <- xgb_perf_obj()
+    safe_plot_roc(m$roc, m$auc, "XGBoost ROC")
+  })
+
+  output$xgb_feature_imp <- renderPlot({
+    Xtrain <- heart.recipe |> prep() |> bake(train) |> select(-target)
+    shp <- shapviz(xgb.fit.obj(), X_pred = data.matrix(Xtrain), X = Xtrain)
+    sv_importance(shp, kind = 'both', fill = '#4A90E2')
   })
 }
 
