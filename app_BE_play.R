@@ -882,7 +882,7 @@ ui <- page_navbar(
             width = 1 / 2,
             card(
               class = "shadow-sm",
-              card_header(tags$strong("Selected XGBoost Tree")),
+              card_header(uiOutput("header_plot_xgb_tree")),
               grVizOutput("plot_xgb_tree")
             ),
             card(
@@ -1611,11 +1611,18 @@ server <- function(input, output, session) {
     )
   })
 
+  output$header_plot_xgb_tree <- renderUI({
+    numBoost <- xgb.get.num.boosted.rounds(xgb.fit.obj())
+    idx <- as.integer(min(input$xgb_tree_index, numBoost))
+    s <- paste0("Displaying XGBoost Tree ", idx, " out of ", numBoost)
+    tags$strong(s)
+  })
+
   output$plot_xgb_tree <- renderGrViz({
     req(xgb.fit.obj())
-
+    numBoost <- xgb.get.num.boosted.rounds(xgb.fit.obj())
     # 1-indexed trees in XGBoost, capped at max rounds
-    idx <- as.integer(min(input$xgb_tree_index, input$xgb_num_boost_round))
+    idx <- as.integer(min(input$xgb_tree_index, numBoost))
 
     xgboost::xgb.plot.tree(
       model = xgb.fit.obj(),
