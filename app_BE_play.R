@@ -521,29 +521,93 @@ ui <- page_navbar(
   nav_panel(
     title = "4. Full Decision Tree",
     value = "tab4",
+
     layout_sidebar(
       sidebar = sidebar(
-        h5("Patient Inputs"),
-        numericInput("p_age", "Age", 55),
-        numericInput("p_thalach", "Max Heart Rate", 150),
-        selectInput("p_cp", "Chest Pain Type", choices = levels(heart$cp)),
-        actionButton("btn_explain", "Predict My Path", class = "btn-primary"),
-        hr(),
-        sliderInput(
-          "tree_cp",
-          "Complexity (Pruning)",
-          min = 0.001,
-          max = 0.05,
-          value = 0.01
+        h5("1. Patient Profile"),
+        helpText(
+          "Adjust these top 5 clinical metrics to see how the patient's path changes (the other 8 metrics are held at baseline averages for simplicity)."
+        ),
+
+        # simplified patient inputs
+        numericInput("p_age", "Age", value = 55, min = 20, max = 100),
+        selectInput(
+          "p_sex",
+          "Sex",
+          choices = c("Female" = "0", "Male" = "1"),
+          selected = "1"
+        ),
+        selectInput(
+          "p_cp",
+          "Chest Pain Type",
+          choices = c(
+            "Typical Angina" = "0",
+            "Atypical" = "1",
+            "Non-anginal" = "2",
+            "Asymptomatic" = "3"
+          ),
+          selected = "3"
+        ),
+        numericInput(
+          "p_thalach",
+          "Max Heart Rate",
+          value = 140,
+          min = 60,
+          max = 220
+        ),
+        numericInput(
+          "p_chol",
+          "Cholesterol",
+          value = 240,
+          min = 100,
+          max = 400
+        ),
+
+        actionButton("btn_predict", "Predict My Path", class = "btn-primary"),
+
+        tags$hr(),
+
+        h5("2. Model Complexity"),
+        helpText(
+          "Trees can grow too complex and 'overfit' the training data. Pruning helps it generalize to new patients."
+        ),
+        checkboxInput(
+          "auto_cp",
+          "Use optimal complexity (Auto-prune)",
+          value = TRUE
+        ),
+
+        # this slider only appears if the checkbox above is UNTICKED
+        conditionalPanel(
+          condition = "!input.auto_cp",
+          sliderInput(
+            "tree_cp",
+            "Complexity parameter (cp):",
+            min = 0.001,
+            max = 0.04,
+            value = 0.01,
+            step = 0.005
+          )
         )
       ),
+
+      # top row: testing data performance metrics
+      uiOutput("tab4_metrics_ui"),
+
       layout_column_wrap(
-        width = 1,
+        width = 1, # single column for a nice wide tree
         card(
-          card_header("Patient Path"),
-          plotOutput("plot_patient_tree", height = 400)
-        ),
-        card(card_header("Tree Performance"), uiOutput("tree_perf_ui"))
+          class = "shadow-sm",
+          card_header(tags$strong("The Full Clinical Decision Tree")),
+          plotOutput("plot_full_tree", height = 500),
+
+          tags$p(
+            style = "font-size: 0.9em; color: #555; text-align: center; margin-top: 10px;",
+            tags$i(
+              "Note: This tree was built using the Training Data, but the accuracy scores above are calculated using the unseen Testing Data to prove it works in the real world."
+            )
+          )
+        )
       )
     )
   ),
@@ -785,37 +849,131 @@ server <- function(input, output, session) {
   outputOptions(output, "plot_step_2d", suspendWhenHidden = FALSE)
 
   # ========================================================================== #
-  ## Tab 4: Full Decision Tree ----
-  tree_model <- reactive({
+  ## Tab 4: Full decision tree server logic ----
+
+  # determine the complexity parameter based on the checkbox
+  current_cp <- reactive({
+    if (input$auto_cp) {
+      0.015 # a hardcoded 'optimal' value that produces a clean, readable tree
+    } else {
+      req(input$tree_cp)
+      input$tree_cp
+    }
+  })
+
+  # build the full tree using all 13 variables on the training data
+  full_tree_model <- reactive({
     rpart(
       target ~ .,
       data = train,
       method = "class",
-      control = rpart.control(cp = input$tree_cp)
+      control = rpart.control(cp = current_cp())
     )
   })
 
-  patient_result <- reactiveVal(NULL)
-  observeEvent(input$btn_explain, {
-    one <- train[1, , drop = FALSE]
-    one$age <- input$p_age
-    one$thalach <- input$p_thalach
-    one$cp <- factor(input$p_cp, levels = levels(train$cp))
+  # calculate testing metrics for the top value boxes
+  output$tab4_metrics_ui <- renderUI({
+    m <- full_tree_model()
 
-    m <- tree_model()
-    leaf <- as.integer(predict(m, one, type = "where"))
-    patient_result(list(model = m, leaf = leaf))
+    # PREDICT ON THE UNSEEN TESTING DATA
+    preds <- predict(m, test, type = "class")
+    actual <- test$target
+
+    cm <- table(Predicted = preds, Actual = actual)
+    acc <- sum(diag(cm)) / sum(cm)
+
+    # sensitivity: true positive rate (how many sick people did we catch?)
+    sens <- if (sum(actual == "1") > 0) cm["1", "1"] / sum(actual == "1") else 0
+    # specificity: true negative rate (how many healthy people did we clear?)
+    spec <- if (sum(actual == "0") > 0) cm["0", "0"] / sum(actual == "0") else 0
+
+    layout_column_wrap(
+      width = 1 / 3,
+      value_box(
+        "Real-World Accuracy",
+        paste0(round(acc * 100, 1), "%"),
+        theme = "success",
+        p("performance on unseen testing data")
+      ),
+      value_box(
+        "Sensitivity (Caught Disease)",
+        paste0(round(sens * 100, 1), "%"),
+        theme = "danger",
+        p("correctly identified disease cases")
+      ),
+      value_box(
+        "Specificity (Cleared Healthy)",
+        paste0(round(spec * 100, 1), "%"),
+        theme = value_box_theme(bg = "#4A90E2", fg = "white"),
+        p("correctly identified healthy cases")
+      )
+    )
   })
 
-  output$plot_patient_tree <- renderPlot({
-    res <- patient_result()
-    if (is.null(res)) {
-      rpart.plot(tree_model(), type = 2, extra = 104)
+  # handle the patient prediction button click
+  patient_leaf <- reactiveVal(NULL)
+
+  observeEvent(input$btn_predict, {
+    # 1. take the first row of training data to get the exact data structure & factor levels
+    one <- train[1, , drop = FALSE]
+
+    # 2. override the 5 variables we expose in the UI
+    one$age <- input$p_age
+    one$sex <- factor(input$p_sex, levels = levels(train$sex))
+    one$cp <- factor(input$p_cp, levels = levels(train$cp))
+    one$thalach <- input$p_thalach
+    one$chol <- input$p_chol
+
+    # 3. safely hold the rest at median/mode so the model doesn't crash
+    one$trestbps <- median(train$trestbps, na.rm = TRUE)
+    one$fbs <- factor("0", levels = levels(train$fbs))
+    one$restecg <- factor("0", levels = levels(train$restecg))
+    one$exang <- factor("0", levels = levels(train$exang))
+    one$oldpeak <- median(train$oldpeak, na.rm = TRUE)
+    one$slope <- factor("1", levels = levels(train$slope))
+    one$ca <- factor("0", levels = levels(train$ca))
+    one$thal <- factor("1", levels = levels(train$thal))
+
+    # 4. BUG FIX: duplicate the row to bypass the rpart 1-row dimension bug
+    two_rows <- rbind(one, one)
+
+    # 5. get the matrix prediction and match its counts to the tree frame
+    m <- full_tree_model()
+    pred_mat <- predict(m, two_rows, type = "matrix")
+
+    # columns 2 and 3 of the matrix hold the exact counts of healthy/sick in that specific leaf
+    leaf_idx <- which(
+      m$frame$var == "<leaf>" &
+        m$frame$yval2[, 2] == pred_mat[1, 2] &
+        m$frame$yval2[, 3] == pred_mat[1, 3]
+    )
+
+    if (length(leaf_idx) > 0) {
+      patient_leaf(as.integer(rownames(m$frame)[leaf_idx[1]]))
     } else {
-      # Highlight path logic
-      node_ids <- as.integer(rownames(res$model$frame))
+      patient_leaf(NULL)
+    }
+  })
+
+  # if the tree structure changes (e.g., user changes cp), reset the patient highlight
+  observeEvent(full_tree_model(), {
+    patient_leaf(NULL)
+  })
+
+  # render the full tree, highlighting the path if the button was clicked
+  output$plot_full_tree <- renderPlot({
+    m <- full_tree_model()
+    node_ids <- as.integer(rownames(m$frame))
+
+    # default colors (blue vs red)
+    box_colors <- ifelse(m$frame$yval == 1, "#8A1C3D", "#4A90E2")
+    names(box_colors) <- as.character(node_ids)
+
+    # if a patient was predicted, calculate the path and highlight it in gold
+    leaf <- patient_leaf()
+    if (!is.null(leaf)) {
       path <- integer(0)
-      curr <- res$leaf
+      curr <- leaf
       while (!is.na(curr) && curr >= 1) {
         path <- c(path, curr)
         if (curr == 1) {
@@ -824,20 +982,24 @@ server <- function(input, output, session) {
         curr <- floor(curr / 2)
       }
 
-      cols <- rep("#EFEFEF", length(node_ids))
-      names(cols) <- as.character(node_ids)
-      hits <- intersect(as.character(path), names(cols))
-      cols[hits] <- "#FFE3EE"
-
-      rpart.plot(res$model, type = 2, extra = 104, box.col = cols)
+      # dim all boxes slightly, then turn the patient's path bright gold
+      box_colors[] <- "#EFEFEF"
+      hits <- intersect(as.character(path), names(box_colors))
+      box_colors[hits] <- "#FFD700"
     }
+
+    rpart.plot(
+      m,
+      type = 2,
+      extra = 104,
+      fallen.leaves = TRUE,
+      main = "",
+      box.col = box_colors,
+      shadow.col = "gray90"
+    )
   })
 
-  output$tree_perf_ui <- renderUI({
-    prob1 <- get_prob1_safe(predict(tree_model(), test, type = "prob"))
-    m <- compute_metrics(test$target, ifelse(prob1 >= 0.5, "1", "0"), prob1)
-    tags$p(sprintf("Accuracy: %.1f%% | AUC: %.2f", m$acc * 100, m$auc))
-  })
+  outputOptions(output, "plot_full_tree", suspendWhenHidden = FALSE)
 
   # ========================================================================== #
   ## Tab 5: Ensembles ----
