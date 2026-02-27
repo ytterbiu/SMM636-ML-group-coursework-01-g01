@@ -6,8 +6,8 @@ project at Bayes Business School (Term 2 2025-26) for module SMM636 Machine
 Learning.
 
 > [!NOTE] Live applications are available via:
-> - [Basic application](https://3enji.shinyapps.io/smm636-a01-tree-based-methods/)
-> - [More specialised decision tree](https://3enji.shinyapps.io/smm636-a01-tree-based-methods-standalone-tab4/)
+> [Basic application](https://3enji.shinyapps.io/smm636-a01-tree-based-methods/)
+> [More specialised decision tree](https://3enji.shinyapps.io/smm636-a01-tree-based-methods-standalone-tab4/)
 
 ## Models Used
 
@@ -62,4 +62,5 @@ install.packages(c(
   "shapviz"
 ))
 ```
+
 
